@@ -1487,6 +1487,15 @@ function rowsFromAI(data,ctx){
       }
     }
 
+    
+    /* التصحيح التلقائي للأخطاء الإملائية والأسماء الغريبة */
+    if(!master){
+      const sug = suggestItems(name, 1);
+      if(sug.length > 0){
+        master = sug[0];
+        notes.push(`تم التصحيح الإملائي إلى: ${labelOf(master)}`);
+      }
+    }
     /* الكمية: الفاتورة بالكيلو -> عدد عبوات، إلا لو الوحدة «مرتبان» */
     const kg=parseFloat(l.qty);
     const pieces=unitIsPieces(l.unit,rawName);
