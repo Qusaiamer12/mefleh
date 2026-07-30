@@ -1,0 +1,31 @@
+# ربط المشروع بمستودع GitHub → Render Blueprint ينشئ الخدمتين تلقائيًا
+# https://render.com/docs/blueprint-spec
+services:
+  # 1) باك إند Node — بروكسي الذكاء الاصطناعي + تقديم احتياطي للواجهة
+  - type: web
+    name: mefleh-warehouse-api
+    runtime: node
+    plan: free
+    startCommand: node server.js
+    envVars:
+      # المفاتيح السرية بتعبّيها من لوحة رندر بعد إنشاء الخدمة (sync:false)
+      - key: AI_GROQ_KEY
+        sync: false
+      - key: AI_QWEN_KEY
+        sync: false
+      - key: AI_KIMI_KEY
+        sync: false
+      - key: AI_PROXY_TOKEN
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  # 2) واجهة النظام — Static (سريعة، ما بتنام)
+  - type: web
+    name: mefleh-warehouse
+    runtime: static
+    staticPublishPath: ./public
+    headers:
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
