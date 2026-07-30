@@ -704,7 +704,7 @@ if(settings.users.some(u=>String(u.user).toLowerCase()==='qusai'))
   settings.users=settings.users.filter(u=>String(u.user).toLowerCase()!=='admin');
 if(!settings.phone) settings.phone='0798003050';
 if(!settings.address) settings.address='الأردن — عمان';
-if(!settings.ai) settings.ai={provider:'groq',keys:{groq:'',qwen:'',kimi:''},models:{}};
+if(!settings.ai) settings.ai={provider:'nvidia',keys:{nvidia:'',groq:'',qwen:'',kimi:''},models:{}};
 if(!settings.ai.keys) settings.ai.keys={};
 if(!settings.ai.models) settings.ai.models={};
 if(!settings.ai.visionModels) settings.ai.visionModels={};
@@ -1303,6 +1303,7 @@ function calcTotal(r){
    بس بيحدد اسم الصنف والعدد، والسعر بيتقرر من قائمة أسعارك.
    ========================================================== */
 const AI_PROVIDERS={
+  nvidia:{label:'Nvidia (Llama 3.1 70B)',url:'https://integrate.api.nvidia.com/v1/chat/completions',model:'meta/llama-3.1-70b-instruct',vision:'meta/llama-3.2-90b-vision-instruct',keyHint:'nvapi-...'},
   groq:{label:'Groq',url:'https://api.groq.com/openai/v1/chat/completions',
         model:'llama-3.3-70b-versatile',
         vision:'meta-llama/llama-4-scout-17b-16e-instruct',keyHint:'gsk_...'},

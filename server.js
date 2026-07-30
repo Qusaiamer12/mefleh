@@ -31,6 +31,8 @@ const ORIGINS = (process.env.ALLOWED_ORIGINS || '*')
 
 /* المزوّدون المعتمدون — المفاتيح من البيئة فقط، لا شي بالكود */
 const PROVIDERS = {
+  nvidia: { url: 'https://integrate.api.nvidia.com/v1/chat/completions',
+          key: process.env.AI_NVIDIA_KEY || '' },
   groq: { url: 'https://api.groq.com/openai/v1/chat/completions',
           key: process.env.AI_GROQ_KEY || '' },
   qwen: { url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
