@@ -1,0 +1,19 @@
+{
+  "name": "mefleh-warehouse",
+  "version": "2.0.0",
+  "private": true,
+  "description": "نظام كشوفات المستودع — واجهة SPA + باك إند Node/Express (بروكسي AI آمن) + فايربيس Firestore",
+  "main": "server.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "deploy:rules": "firebase deploy --only firestore:rules"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.15.4"
+  }
+}
