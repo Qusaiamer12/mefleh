@@ -1,0 +1,15 @@
+{
+  "name": "نظام المفلح للمستودعات",
+  "short_name": "المفلح",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#075e35",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
