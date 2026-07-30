@@ -1386,18 +1386,22 @@ function visionPrompt(){
 8. الملاحظات: لا تضع أي حسابات أو استنتاجات في note، فقط ضع الملاحظات المكتوبة صراحة.`;
 }
 
+function sizeInKg(it){
+  if(!it||!it.size) return 0;
+  const u=String(it.unit||'').trim();
+  return (u==='غ'||u==='غم'||u==='غرام') ? it.size/1000 : it.size;
+}
+
 function bestSizeFor(baseName,kg,preferred){
   const bk=key(baseName);
   const fam=items.filter(it=>key(it.base||it.name)===bk && it.size);
   if(!fam.length) return null;
-  /* لو الحجم المفضّل بيقسم تمام، خليه */
   if(preferred){
     const n=kg/preferred;
-    if(Math.abs(n-Math.round(n))<0.02) return fam.find(f=>f.size===preferred)||null;
+    if(Math.abs(n-Math.round(n))<0.02) return fam.find(f=>sizeInKg(f)===preferred)||null;
   }
-  /* غير هيك دوّر على حجم بيقسّم لعدد صحيح — والأكبر أولًا (أقل عبوات) */
-  const exact=fam.filter(f=>{ const n=kg/f.size; return Math.abs(n-Math.round(n))<0.02 && Math.round(n)>=1; })
-                 .sort((a,b)=>b.size-a.size);
+  const exact=fam.filter(f=>{ const sz=sizeInKg(f); if(!sz) return false; const n=kg/sz; return Math.abs(n-Math.round(n))<0.02 && Math.round(n)>=1; })
+                 .sort((a,b)=>sizeInKg(b)-sizeInKg(a));
   return exact[0]||null;
 }
 
