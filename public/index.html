@@ -1385,10 +1385,11 @@ function bestSizeFor(baseName,kg,preferred){
 }
 
 /* الفاتورة بتعطي كيلوات — منحوّلها لعدد عبوات حسب حجم العبوة بالقائمة */
-function packsFromInvoiceLine(master,qtyRaw,unitTxt,itemTxt,notes){
+function packsFromInvoiceLine(master,qtyRaw,unitTxt,itemTxt,notes,ctx){
   const qty=parseFloat(qtyRaw);
   if(isNaN(qty)) return '';
   /* «مرتبان/عبوة» يعني العدد صريح، ما بنحوّل */
+  if(ctx && ctx.isText) return qty;
   if(unitIsPieces(unitTxt,itemTxt)) return qty;
   if(!master) return qty;
   const size=itemSize(master).size;
@@ -1490,7 +1491,7 @@ function rowsFromAI(data,ctx){
     const kg=parseFloat(l.qty);
     const pieces=unitIsPieces(l.unit,rawName);
     /* لو بالكيلو: اختَر حجم العبوة اللي بيقسّم الكيلوات لعدد صحيح */
-    if(!pieces && !isNaN(kg)){
+    if(ctx.isVision && !pieces && !isNaN(kg)){
       const famBase=(master&&(master.base||master.name))||itemSize(name).base||name;
       /* الحجم الافتراضي المعتمد (المكدوس 4ك) له الأولوية */
       const dflt=defaultSizeFor(famBase);
@@ -1511,7 +1512,7 @@ function rowsFromAI(data,ctx){
         }
       }
     }
-    let qty=packsFromInvoiceLine(master,l.qty,l.unit,rawName,notes);
+    let qty=packsFromInvoiceLine(master,l.qty,l.unit,rawName,notes,ctx);
 
     let price='';
     if(master){
@@ -2451,7 +2452,7 @@ async function doVision(){
   try{
     const {data}=await aiVision(IMG.url);
     const vou=(data.voucher==='إدخال'||data.voucher==='إخراج')?data.voucher:draft.voucher;
-    const rows=rowsFromAI(data,{day:draft.day,voucher:vou,date:draft.date});
+    const rows=rowsFromAI(data,{day:draft.day,voucher:vou,date:draft.date, isVision:true});
     if(!rows.length) throw new Error('ما قدرت أقرأ أي بند من الصورة');
     draft.rows=draft.rows.concat(rows);
     draft.voucher=vou; if($('fVou'))$('fVou').value=vou;
@@ -2479,7 +2480,7 @@ async function doAI(){
   try{
     const {data}=await aiAnalyze(txt,draft.day);
     const vou=(data.voucher==='إدخال'||data.voucher==='إخراج')?data.voucher:draft.voucher;
-    const rows=rowsFromAI(data,{day:draft.day,voucher:vou,date:draft.date});
+    const rows=rowsFromAI(data,{day:draft.day,voucher:vou,date:draft.date, isText:true});
     if(!rows.length) throw new Error('النموذج ما رجّع أي بند');
     draft.rows=draft.rows.concat(rows);
     if(data.voucher==='إدخال'||data.voucher==='إخراج'){
