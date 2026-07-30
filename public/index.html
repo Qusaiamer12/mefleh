@@ -953,7 +953,7 @@ function unitIsPieces(unitTxt,itemTxt){
 }
 
 /* 3) حجم افتراضي لأصناف معروفة لما ما ينذكر حجم */
-const DEFAULT_SIZE={'مكدوس':4,'مكدوس سوبر':4};
+const DEFAULT_SIZE={'مقدوس':4,'مكدوس جبهة':4,'مشرح بالجزر':5,'مخلل لفت':10,'مخلل زهرة':8,'جرجير':10,'يوناني':5,'شطة':15,'محشي جزر':5,'جامبو':5};
 function defaultSizeFor(baseName){
   const k=key(baseName);
   for(const n in DEFAULT_SIZE) if(key(n)===k) return DEFAULT_SIZE[n];
