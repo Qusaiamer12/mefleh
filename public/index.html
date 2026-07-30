@@ -3368,7 +3368,7 @@ function vSettings(){
         :'<b>⚠️ ما أخذت أي نسخة احتياطية لحد الآن.</b>'}
       ${warn?'<br>الوقت مناسب تنزّل نسخة جديدة.':''}
     </div>
-    <label class="chkRow"><input type="checkbox" id="autoDl" ${settings.autoDownload!==false?'checked':''}
+    <label class="chkRow"><input type="checkbox" id="autoDl" ${settings.autoDownload===true?'checked':''}
       onchange="settings.autoDownload=this.checked;saveSet();notify(this.checked?'رح تنزل نسخة تلقائية كل يوم':'وقّفت التنزيل التلقائي — بتضل لقطة داخلية','ok')">
       <span>نزّل نسخة احتياطية تلقائيًا أول مرة تفتح النظام كل يوم</span></label>
     <div class="row" style="margin-top:14px">
@@ -3679,7 +3679,7 @@ function autoBackup(){
     try{ localStorage.setItem('wh_autosnap',JSON.stringify(
       {date:snap.date,count:snap.count})); }catch(e){}
     saveSet();
-    if(settings.autoDownload!==false){
+    if(settings.autoDownload===true){
       dl(`نسخة_تلقائية_${today}.json`,snap.data,'application/json;charset=utf-8;');
       notify('📦 نزلت نسخة احتياطية تلقائية لليوم','ok',5000);
     }else{
