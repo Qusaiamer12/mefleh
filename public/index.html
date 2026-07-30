@@ -2767,7 +2767,7 @@ function drawInv(){
       <td>${v.rows.length}</td><td><b>${fx(v.total)}</b></td>
       <td>
         <button class="btn blue sm" onclick="viewInv('${v.id}')">عرض</button>
-        ${isAdmin()?`<button class="btn sm" onclick="editInv('${v.id}')">تعديل</button>
+        ${(isAdmin() || v.customer === myCustomer())?`<button class="btn sm" onclick="editInv('${v.id}')">تعديل</button>
         <button class="btn danger sm" onclick="delInv('${v.id}')">حذف</button>`:''}
       </td></tr>`).join(''):'<tr><td colspan="7">لا يوجد سندات</td></tr>'}</tbody>
     </table></div>
@@ -2804,15 +2804,15 @@ function viewInv(id){
   try{ $('invDetail').scrollIntoView({behavior:'smooth'}); }catch(e){}
 }
 function editInv(id){
-  if(!isAdmin()){ notify('ما إلك صلاحية التعديل','bad'); return; }
   const v=invoices.find(x=>x.id===id); if(!v)return;
+  if(!isAdmin() && v.customer !== myCustomer()){ notify('ما إلك صلاحية التعديل','bad'); return; }
   draft={id:v.id,no:v.no,customer:v.customer,voucher:v.voucher,date:v.date,day:'',
     rows:JSON.parse(JSON.stringify(v.rows))};
   lastSkipped=[]; go('entry'); toast('تعديل السند '+v.no);
 }
 async function delInv(id){
-  if(!isAdmin()){ notify('ما إلك صلاحية الحذف','bad'); return; }
   const v=invoices.find(x=>x.id===id); if(!v)return;
+  if(!isAdmin() && v.customer !== myCustomer()){ notify('ما إلك صلاحية الحذف','bad'); return; }
   const ok=await ask({title:'حذف السند',danger:true,ok:'احذف',
     body:`رح ينحذف السند <b>${esc(v.no)}</b> — ${esc(v.customer)}<br>
           ${v.rows.length} بند بإجمالي <b>${fx(v.total)}</b>.<br><br>
