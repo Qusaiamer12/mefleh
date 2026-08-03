@@ -145,6 +145,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('*', (req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
+
+/* ---------- منع السبات (Render) ---------- */
+if (process.env.RENDER_EXTERNAL_URL) {
+  setInterval(() => {
+    fetch(process.env.RENDER_EXTERNAL_URL + '/api/health').catch(() => {});
+  }, 10 * 60 * 1000);
+}
+
 const srv = app.listen(PORT, () =>
   console.log(`✅ mefleh-warehouse API listens on :${PORT}`));
 srv.setTimeout(120000);
