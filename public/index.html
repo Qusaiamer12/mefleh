@@ -1698,6 +1698,7 @@ async function doLogin(){
   document.body.classList.remove('loginMode');
   render();
   notify(`أهلاً ${SESSION.name} 👋`,'ok',3500);
+  if(isAdmin()) setTimeout(recoverDraft, 500);
   if(rec.mustChange) setTimeout(()=>promptChangePw(true),700);
 }
 
@@ -3780,7 +3781,7 @@ setInterval(()=>{ try{
   if(draft.rows.length) localStorage.setItem('wh_draft',JSON.stringify(draft));
   else localStorage.removeItem('wh_draft');
 }catch(e){} },4000);
-function recoverDraft(){
+function recoverDraft(){ if(!isAdmin()) return; if(!IS_ADMIN) return;
   try{
     const d=JSON.parse(localStorage.getItem('wh_draft')||'null');
     if(d&&d.rows&&d.rows.length){
