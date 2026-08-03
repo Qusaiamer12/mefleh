@@ -1818,6 +1818,7 @@ function buildTabs(){
     ? [['entry','① إدخال سند'],['invoices','② السندات المحفوظة'],
        ['report','③ الكشف والتقارير'],['items','④ قائمة الأسعار'],
        ['ledger','🧮 كشف حساب لزبوني'],
+       ['consumption','📊 معدل الاستهلاك'],
        ['requests','📝 طلبات التعديل'+bdg(rb)],
        ['messages','💬 الرسائل'+bdg(mb)],
        ['alerts','🔔 الإشعارات'+bdg(nb)],
@@ -2754,6 +2755,63 @@ function nextNo(cust,vou){
 <script>
 /* ============ ② السندات المحفوظة ============ */
 let fInv={q:'',cust:'',vou:'',from:'',to:''};
+let fCons={q:'',from:'',to:''};
+
+function vConsumption(){
+  if(!fCons.from){const w=weekBounds();fCons.from=w[0];fCons.to=w[1];}
+  $('view').innerHTML=`
+  <div class="card noprint">
+    <h2>📊 معدل الاستهلاك وحركة الأصناف</h2>
+    <p class="hint">هذا التقرير بيجمعلك كميات الأصناف المستهلكة (إخراج) والمرتجعة (إدخال) ضمن فترة محددة.</p>
+    <div class="grid g3">
+      <div><label>البحث عن صنف (اختياري)</label><input id="cq" value="${esc(fCons.q)}" oninput="fCons.q=this.value;drawConsumption()" placeholder="مثال: مكدوس"></div>
+      <div><label>من تاريخ</label><input type="date" value="${fCons.from}" onchange="fCons.from=this.value;drawConsumption()"></div>
+      <div><label>إلى تاريخ</label><input type="date" value="${fCons.to}" onchange="fCons.to=this.value;drawConsumption()"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn blue" onclick="window.print()">🖨️ طباعة / PDF</button>
+    </div>
+  </div>
+  <div id="consBox"></div>`;
+  drawConsumption();
+}
+function drawConsumption(){
+  if(!$('consBox')) return;
+  const q=key(fCons.q);
+  const L=scopeInvoices(invoices).filter(v=>{
+    if(fCons.from&&v.date<fCons.from)return false;
+    if(fCons.to&&v.date>fCons.to)return false;
+    return true;
+  });
+  
+  const map={};
+  L.forEach(v=>{
+    v.rows.forEach(r=>{
+      if(q && !key(r.item).includes(q)) return;
+      if(!map[r.item]) map[r.item]={out:0, inn:0};
+      const val = parseFloat(r.qty)||0;
+      if(v.voucher==='إخراج') map[r.item].out+=val;
+      else if(v.voucher==='إدخال') map[r.item].inn+=val;
+    });
+  });
+
+  const arr=Object.keys(map).map(k=>({item:k, out:map[k].out, inn:map[k].inn, net:map[k].out-map[k].inn}));
+  arr.sort((a,b)=>b.out-a.out);
+
+  $('consBox').innerHTML=`
+  <div class="card">
+    <div class="tw"><table>
+    <thead><tr><th>الصنف (مع الوزن)</th><th>إخراج (مبيعات)</th><th>إدخال (مرتجعات)</th><th>الصافي (الاستهلاك)</th></tr></thead>
+    <tbody>${arr.length?arr.map(x=>`<tr>
+      <td><b>${esc(x.item)}</b></td>
+      <td class="vOut">${x.out}</td>
+      <td class="vIn">${x.inn}</td>
+      <td><b>${x.net}</b></td>
+      </tr>`).join(''):'<tr><td colspan="4">لا يوجد حركة أصناف مطابقة</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
 function vInvoices(){
   $('view').innerHTML=`
   <div class="card">
