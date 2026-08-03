@@ -4284,35 +4284,128 @@ const finish=j=>({data:extractJSON(
   (j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||''),usage:j.usage});
 const localKey=()=>(settings.ai.keys||{})[settings.ai.provider];
 
+
 const _aiAnalyze=aiAnalyze, _aiVision=aiVision;
-aiAnalyze=async function(txt,dayHint){
-  if(await useProxy() && (!PROXY.providers || PROXY.providers[settings.ai.provider]!==false)){
-    try{
-      const p=AI_PROVIDERS[settings.ai.provider];
-      const j=await proxyCall(settings.ai.provider,
-        {model:p.model,temperature:0,response_format:{type:'json_object'},
-         messages:[{role:'user',content:aiPrompt(txt,dayHint)}]});
-      if(j!==null) return finish(j);
-    }catch(e){
-      if(!localKey()) throw e;                        /* ما في مفتاح محلي نرجعله */
+
+aiAnalyze = async function(txt, dayHint) {
+  const providers = ['groq', 'qwen', 'kimi'];
+  const pref = settings.ai.provider;
+  if (providers.includes(pref)) {
+    providers.splice(providers.indexOf(pref), 1);
+    providers.unshift(pref);
+  }
+
+  let lastError = null;
+  const useProx = await useProxy();
+
+  for (const prov of providers) {
+    const p = AI_PROVIDERS[prov];
+    if (!p) continue;
+
+    if (useProx && (!PROXY.providers || PROXY.providers[prov] !== false)) {
+      try {
+        const j = await proxyCall(prov, {
+          model: p.model,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'user', content: aiPrompt(txt, dayHint) }]
+        });
+        if (j !== null) return finish(j);
+      } catch (e) {
+        lastError = e;
+        console.warn('[Proxy] ' + prov + ' failed:', e.message);
+      }
+    }
+
+    const localK = (settings.ai.keys || {})[prov];
+    if (localK) {
+      try {
+        const res = await fetch(p.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localK },
+          body: JSON.stringify({
+            model: p.model,
+            temperature: 0,
+            messages: [{ role: 'user', content: aiPrompt(txt, dayHint) }],
+            response_format: { type: 'json_object' }
+          })
+        });
+        if (!res.ok) {
+          let m = ''; try { const j = await res.json(); m = j.error?.message || JSON.stringify(j).slice(0, 200); } catch (e) { m = 'HTTP ' + res.status; }
+          throw new Error(m);
+        }
+        const j = await res.json();
+        const raw = j.choices?.[0]?.message?.content || '';
+        return { data: extractJSON(raw), usage: j.usage };
+      } catch (e) {
+        lastError = e;
+        console.warn('[Local] ' + prov + ' failed:', e.message);
+      }
     }
   }
-  return _aiAnalyze(txt,dayHint);
+
+  throw lastError || new Error('فشلت جميع محاولات الاتصال (نفد الرصيد من جميع المزودات)');
 };
-aiVision=async function(dataUrl){
-  if(await useProxy() && (!PROXY.providers || PROXY.providers[settings.ai.provider]!==false)){
-    try{
-      const prov='qwen', p=AI_PROVIDERS[prov];
-      const model=(settings.ai.visionModels&&settings.ai.visionModels[prov])||p.vision;
-      const j=await proxyCall(prov,{model,temperature:0,max_tokens:4000,
-        messages:[{role:'user',content:[{type:'text',text:visionPrompt()},
-          {type:'image_url',image_url:{url:dataUrl}}]}]});
-      if(j!==null) return finish(j);
-    }catch(e){
-      if(!localKey()) throw e;
+
+aiVision = async function(dataUrl) {
+  const providers = ['qwen', 'groq'];
+  let lastError = null;
+  const useProx = await useProxy();
+
+  for (const prov of providers) {
+    const p = AI_PROVIDERS[prov];
+    if (!p || !p.vision) continue;
+    const model = (settings.ai.visionModels && settings.ai.visionModels[prov]) || p.vision;
+
+    if (useProx && (!PROXY.providers || PROXY.providers[prov] !== false)) {
+      try {
+        const j = await proxyCall(prov, {
+          model,
+          temperature: 0,
+          max_tokens: 4000,
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: visionPrompt() },
+            { type: 'image_url', image_url: { url: dataUrl } }
+          ] }]
+        });
+        if (j !== null) return finish(j);
+      } catch (e) {
+        lastError = e;
+        console.warn('[Proxy Vision] ' + prov + ' failed:', e.message);
+      }
+    }
+
+    const localK = (settings.ai.keys || {})[prov];
+    if (localK) {
+      try {
+        const res = await fetch(p.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localK },
+          body: JSON.stringify({
+            model,
+            temperature: 0,
+            max_tokens: 4000,
+            messages: [{ role: 'user', content: [
+              { type: 'text', text: visionPrompt() },
+              { type: 'image_url', image_url: { url: dataUrl } }
+            ] }]
+          })
+        });
+        if (!res.ok) {
+          let m = ''; try { const j = await res.json(); m = j.error?.message || JSON.stringify(j).slice(0, 200); } catch (e) { m = 'HTTP ' + res.status; }
+          throw new Error(m);
+        }
+        const j = await res.json();
+        const raw = j.choices?.[0]?.message?.content || '';
+        return { data: extractJSON(raw), usage: j.usage };
+      } catch (e) {
+        lastError = e;
+        console.warn('[Local Vision] ' + prov + ' failed:', e.message);
+      }
     }
   }
-  return _aiVision(dataUrl);
+
+  throw lastError || new Error('فشلت جميع محاولات قراءة الصورة (نفد الرصيد)');
 };
 })();
 </script>
