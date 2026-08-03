@@ -894,12 +894,13 @@ const SYNONYMS=[
   [/لفت.*اصابع|مخلل\\s*لفت/, 'لفت'],
   [/ورق\\s*عنب/, 'دوالي'],
   [/مقدوس/, 'مكدوس'],
+  [/سلطة\s*فلفل|فلفل\s*سلط[ةه]/, 'سلطة فلفل'],
   [/توم/, 'ثوم'],
   [/مشوي\s*ساد[ةه]/, 'اثينا مشوي'],
   [/زيت\s*صويا/, 'زيت صفوة'],
   [/^مشوي$|مشوي(?=\s*14)/, 'تنك مشوي'],
   [/مشرح\s*المفلح.*/, 'مفلح مشرح'],
-  [/كلمتا\s*يوناني/, 'يوناني'],
+  [/(?:ال)?كلمتا\s*(?:ال)?يوناني/, 'يوناني'],
   [/ورق\s*عنب/, 'دوالي'],
   [/مقدوس/, 'مكدوس'],
   [/مخلل\s*زهره|مخلل\s*زهرة|زهرة|زهره/, 'زھرة'],
@@ -932,8 +933,9 @@ function applyBusinessRules(rawName){
   const notes=[];
   for(const [re,canon] of SYNONYMS){
     if(re.test(n)){
-      if(key(n)!==key(canon)) notes.push('وحّدته مع: '+canon);
-      n=canon; break;
+      const newVal = n.replace(new RegExp(re.source, re.flags), canon).replace(/\s+/g, ' ').trim();
+      if(key(n)!==key(newVal)) notes.push('وحّدته مع: '+canon);
+      n=newVal; break;
     }
   }
   const before=n;
