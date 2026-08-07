@@ -474,12 +474,12 @@ details.card summary::marker{color:var(--g)}
   header,nav.tabs,#navNotch,#navScrim,.noprint,.btns,.row,.toast,.modalWrap{display:none !important}
   body{background:#fff;font-size:11.5pt}
   main,header{margin-right:0 !important;padding:0;max-width:none;display:block}
-  .card{border:0;box-shadow:none;padding:0;margin:0 0 5mm;break-inside:auto;page-break-inside:auto}
+  .card,.tw,.scroll{border:0;box-shadow:none;padding:0;margin:0;break-inside:auto;page-break-inside:auto;break-before:auto;page-break-before:auto;display:block !important}
   /* الجدول ما ينقسم بشكل يقطع صف، والترويسة تتكرر بكل صفحة */
   .tw,.scroll{overflow:visible !important;border:0;box-shadow:none;margin:0;padding:0}
   table{page-break-inside:auto;border-collapse:collapse;width:100%}
-  thead{display:table-header-group}
-  tfoot{display:table-footer-group}
+  thead{display:table-row-group}
+  tfoot{display:table-row-group}
   tr{page-break-inside:avoid;page-break-after:auto}
   th{background:#075e35 !important;color:#fff !important;
      -webkit-print-color-adjust:exact;print-color-adjust:exact}
