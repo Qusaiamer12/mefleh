@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+!.env.example
+# ملفات الشات والسندات والنسخ الاحتياطية — ما بتنرفع أبدًا
+imports/
+*.zip
+WhatsApp*
+نسخة_*.json
