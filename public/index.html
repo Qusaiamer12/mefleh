@@ -3717,8 +3717,8 @@ function vSettings(){
   <div class="card">
     <h2>📥 استيراد سندات جاهزة (من شات واتساب)</h2>
     <p class="hint">ملف <b>import.json</b> اللي بيجهزه قارئ الشات. الاستيراد <b>بيضيف سندات جديدة بس</b> —
-      ما بيمسح ولا بيعدّل أي سند أو صنف أو سعر موجود. الأسعار بتنحسب من قائمتك الحالية
-      (إلا إذا الرسالة نفسها فيها سعر)، والسندات بتنعلّم 🟡 لحد ما تراجعها.</p>
+      ما بيمسح ولا بيعدّل أي سند أو صنف أو سعر موجود. السعر: من الرسالة إذا مكتوب فيها،
+      وإلا آخر سعر استعملته لنفس الزبون والصنف، وإلا من قائمتك. السندات بتنعلّم 🟡 لحد ما تراجعها.</p>
     <label class="btn" style="cursor:pointer;display:inline-block;width:auto">
       📥 اختار ملف السندات<input type="file" accept=".json,application/json" style="display:none"
         onchange="importVouchers(this.files[0]);this.value=''"></label>
@@ -4059,7 +4059,25 @@ if(!settings.ai) settings.ai={provider:'groq',keys:{},models:{}};
 }
 /* ===== استيراد سندات جاهزة (ملف mefleh-import من tools/wa-reader.js) =====
    إضافة فقط: ما في حذف ولا استبدال لأي سند/صنف/سعر موجود.        */
-function importRow(r,voucher,date){
+/* آخر سعر استعملته فعليًا لنفس الزبون والصنف والحجم والاتجاه (قبل هالتاريخ).
+   بالبيانات الحقيقية بيطابق 90% من الإخراج مقابل 61% لسعر القائمة.
+   قراءة بس — قائمة الأسعار ما بتتغيّر. */
+function lastUsedPrice(customer,voucher,date,row){
+  const k=key(row.item), w=String(row.weight??'');
+  let best=null;
+  for(const v of invoices){
+    if(v.customer!==customer||v.voucher!==voucher||!(v.date<=date)) continue;
+    if(best&&v.date<best.date) continue;
+    for(const x of v.rows||[]){
+      if(key(x.item)===k&&String(x.weight??'')===w&&x.price!==''&&x.price!==null&&x.price!==undefined&&!isNaN(+x.price)){
+        if(!best||v.date>best.date||(v.date===best.date&&String(v.savedAt||'')>String(best.savedAt||'')))
+          best={price:+x.price,date:v.date,savedAt:v.savedAt};
+      }
+    }
+  }
+  return best;
+}
+function importRow(r,voucher,date,customer){
   const notes=[];
   const qty=(r.qty===null||r.qty===undefined)?'':r.qty;
   const w=(r.weight===null||r.weight===undefined||r.weight==='')?'':r.weight;
@@ -4086,6 +4104,12 @@ function importRow(r,voucher,date){
   }
   if(r.priceFromMsg && r.price!==null && r.price!==undefined && !isNaN(+r.price)){
     row.price=+r.price; notes.push('السعر من الرسالة');
+  }else if(customer && row.item && !r.bulk){
+    const last=lastUsedPrice(customer,voucher,date,row);
+    if(last && (row.price===''||Math.abs(last.price-(+row.price))>0.0005)){
+      notes.push(`آخر سعر استعملته لـ ${customer} (${last.date})${row.price!==''?' — القائمة '+fx(row.price):''}`);
+      row.price=last.price;
+    }
   }
   calcTotal(row);
   row.notes=[row.notes,r.notes?'📱 '+r.notes:'',...notes].filter(Boolean).join(' • ');
@@ -4115,7 +4139,7 @@ function importVouchers(f){
     const clash=fresh.filter(v=>invoices.some(x=>x.customer===o.customer&&x.date===v.date&&x.voucher===v.voucher));
     if(!fresh.length){
       say('ما في جديد',`كل سندات الملف (${okV.length}) مستوردة من قبل — ما انضاف شي.`); return; }
-    const built=fresh.map(v=>({v,rows:v.rows.map(r=>importRow(r,v.voucher,v.date))}));
+    const built=fresh.map(v=>({v,rows:v.rows.map(r=>importRow(r,v.voucher,v.date,o.customer))}));
     const tot=(vou)=>built.filter(b=>b.v.voucher===vou)
       .reduce((a,b)=>a+b.rows.reduce((s,r)=>s+(parseFloat(r.total)||0),0),0);
     const nWarn=built.reduce((a,b)=>a+b.rows.filter(r=>r.price===''||/⚠️/.test(r.notes)).length,0);
