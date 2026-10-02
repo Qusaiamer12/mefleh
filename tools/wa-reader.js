@@ -9,7 +9,7 @@
    الاستخدام:
      node tools/wa-reader.js parse <chat.txt|chat.zip> --customer اسلام
           [--from 2026-09-08] [--to 2026-09-25] [--backup backup.json]
-          [--mdy|--dmy] [--out imports/out]
+          [--mdy|--dmy] [--out imports/out] [--photos photos.txt]
        → import.json  (لزر «استيراد سندات جاهزة» بالإعدادات)
        → review.md    (البنود المشكوك فيها + الصور اللي لازم تنقرا)
        → media/       (صور الفواتير إذا التصدير «مع الوسائط»)
@@ -334,6 +334,44 @@ function chatToVouchers(app, msgs, opt) {
   return { vouchers, log };
 }
 
+/* ---------- قراءة صور الفواتير (يدويًا) → بنود ----------
+   ملف نصي: لكل صورة سطر عنوان ثم البنود بصيغة النظام «صنف عدد حجمك»:
+     # 00003015-PHOTO-2026-09-08-11-49-43.jpg إخراج
+     مشكل 5 10ك
+     مكسيكي 3 7ك
+   التاريخ = تاريخ رسالة الصورة (أو @2026-09-08 بالعنوان). سطر يبدأ بـ ; = ملاحظة. */
+function mergePhotos(app, vouchers, images, text) {
+  const byKey = new Map(vouchers.map(v => [v.date + '|' + v.voucher, v]));
+  const log = [];
+  let cur = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const ln = raw.trim();
+    if (!ln || ln.startsWith(';')) continue;
+    if (ln.startsWith('#')) {
+      const h = ln.slice(1).trim();
+      const dm = h.match(/@(\d{4}-\d{2}-\d{2})/);
+      const vou = /إدخال|ادخال|مرتجع/.test(h) ? 'إدخال' : 'إخراج';
+      const ref = h.split(/\s+/)[0];
+      const img = images.find(i => i.file && (i.file === ref || i.file.startsWith(ref)));
+      const date = dm ? dm[1] : (img && img.date);
+      if (!date) { log.push(`⚠️ ما لقيت تاريخ للصورة ${ref}`); cur = null; continue; }
+      cur = { ref, date, vou, img };
+      continue;
+    }
+    if (!cur) continue;
+    const ctx = { day: '', voucher: cur.vou, date: cur.date, cancelLast: false };
+    const r = app.call('parseLine', ln, ctx);
+    if (!r) { log.push(`⚠️ ${cur.ref}: «${ln}» ما انقرى`); continue; }
+    r.original = ln; r.src = 'image'; r.day = app.call('dayNameOf', cur.date);
+    r.msgTime = cur.img ? cur.img.time : ''; r.msgHead = '📷 ' + cur.ref;
+    const k = cur.date + '|' + cur.vou;
+    if (!byKey.has(k)) { const v = { date: cur.date, voucher: cur.vou, rows: [] }; byKey.set(k, v); vouchers.push(v); }
+    byKey.get(k).rows.push(r);
+  }
+  vouchers.sort((a, b) => (a.date + a.voucher).localeCompare(b.date + b.voucher));
+  return log;
+}
+
 /* ---------- المخرجات ---------- */
 function custCode(app, name) {
   const c = (app.run('settings').customers || []).find(x => x.name === name);
@@ -451,6 +489,10 @@ function main() {
     const { txt, media } = readChat(o._[0], out);
     const { order, msgs } = splitMessages(txt, o.order);
     const { vouchers, log } = chatToVouchers(app, msgs, o);
+    if (o.photos) {
+      const plog = mergePhotos(app, vouchers, log.images, fs.readFileSync(o.photos, 'utf8'));
+      plog.forEach(t => log.skipped.push({ date: '', time: '', text: t, why: 'ملف الصور' }));
+    }
     const imp = toImport(app, vouchers, o);
     fs.writeFileSync(path.join(out, 'import.json'), JSON.stringify(imp, null, 1));
     fs.writeFileSync(path.join(out, 'review.md'), reviewMd(imp, log, { order, media }));
@@ -475,4 +517,4 @@ function main() {
 if (require.main === module) {
   try { main(); } catch (e) { console.error('❌ ' + (e && e.message || e)); process.exit(1); }
 }
-module.exports = { loadApp, normChat, splitMessages, chatToVouchers, prepLine, toImport, compare };
+module.exports = { loadApp, normChat, splitMessages, chatToVouchers, mergePhotos, prepLine, toImport, compare };
