@@ -2879,7 +2879,10 @@ function commitInvoice(d,extra){
     rows:JSON.parse(JSON.stringify(d.rows)).map(r=>({...r,day:r.day||dayNameOf(d.date)})),
     total:+total.toFixed(4),
     savedAt:new Date().toISOString() },
-    old&&old.importKey?{src:old.src,importKey:old.importKey,review:false}:{},
+    /* سند مستورد انعدّل: بيضل مستورد بس إذا ضل لنفس الزبون والتاريخ والنوع —
+       لو صار سند ثاني (زبون/تاريخ غير) ما بيضل يحجز مفتاح الاستيراد */
+    old&&old.importKey&&old.customer===d.customer&&old.date===d.date&&old.voucher===d.voucher
+      ?{src:old.src,importKey:old.importKey,review:false}:{},
     extra||{});
   if(editing){
     if(ix>=0) invoices[ix]=inv; else invoices.unshift(inv);
@@ -4146,7 +4149,9 @@ function importVouchers(f){
     const okV=o.vouchers.filter(v=>/^\d{4}-\d{2}-\d{2}$/.test(v.date||'')
       &&(v.voucher==='إدخال'||v.voucher==='إخراج')&&Array.isArray(v.rows)&&v.rows.length);
     const bad=o.vouchers.length-okV.length;
-    const keys=new Set(invoices.map(v=>v.importKey).filter(Boolean));
+    /* مفاتيح الاستيراد لنفس الزبون والتاريخ والنوع بس (سند انعدّل لزبون ثاني ما بيحسب) */
+    const keys=new Set(invoices.filter(v=>v.importKey&&v.customer===o.customer
+      &&v.importKey.endsWith(`-${v.date}-${v.voucher==='إخراج'?'O':'I'}`)).map(v=>v.importKey));
     const seen=okV.filter(v=>v.key&&keys.has(v.key));
     const fresh=okV.filter(v=>!(v.key&&keys.has(v.key)));
     const clash=fresh.filter(v=>invoices.some(x=>x.customer===o.customer&&x.date===v.date&&x.voucher===v.voucher));
