@@ -247,7 +247,9 @@ function chatToVouchers(app, msgs, opt) {
   }
 
   let lastImg = null;
-  for (const m of list) {
+  /* ord = ترتيب الرسالة بالشات — البنود بتنسجّل بنفس ترتيب الكلام والصور */
+  for (const [mi, m] of list.entries()) {
+    let lineNo = 0;
     if (opt.from && m.date < opt.from) continue;
     if (opt.to && m.date > opt.to) continue;
     if (!m.sender || SKIP_MSG.test(m.text)) continue;
@@ -259,7 +261,7 @@ function chatToVouchers(app, msgs, opt) {
     /* «<attached: …>» أولًا — تعليق المستند فيه اسم ملف ثاني («…FrmQR.pdf • 1 page») */
     const med = text.match(/<attached:\s*([^>]+)>/i) || text.match(MEDIA_RE);
     if (med) {
-      img = { date: m.date, time: m.time, sender: m.sender,
+      img = { ord: mi, date: m.date, time: m.time, sender: m.sender,
         file: (med[1] || med[2] || '').trim(), caption: stripMedia(text), notes: [] };
       log.images.push(img);
       lastImg = img;
@@ -337,6 +339,7 @@ function chatToVouchers(app, msgs, opt) {
       r.original = ln.trim();
       r.day = app.call('dayNameOf', m.date);
       r.msgTime = m.time; r.sender = m.sender; r.msgHead = header.slice(0, 60);
+      r.ord = mi * 1000 + (++lineNo);
       r.src = img ? 'caption' : 'text';
       if (img) img.notes.push(`${m.time} «${ln.trim()}» انضاف كبند`);
       if (pre.price !== null) { r.price = pre.price; r.priceFromMsg = true;
@@ -375,7 +378,7 @@ function mergePhotos(app, vouchers, images, text) {
       const date = dm ? dm[1] : (img && img.date);
       /* صورة مش بالفترة المطلوبة (--from/--to) — منتخطاها بهدوء */
       if (!date) { outside.push(ref); cur = null; continue; }
-      cur = { ref, date, vou, img };
+      cur = { ref, date, vou, img, n: 0 };
       continue;
     }
     if (!cur) continue;
@@ -391,11 +394,18 @@ function mergePhotos(app, vouchers, images, text) {
     if (note) r.notes = (r.notes ? r.notes + ' • ' : '') + '⚠️ ' + note;
     r.original = body; r.src = 'image'; r.day = app.call('dayNameOf', cur.date);
     r.msgTime = cur.img ? cur.img.time : ''; r.msgHead = '📷 ' + cur.ref;
+    /* بند الصورة مكانه مكان رسالة الصورة بالشات (تعليقها بييجي قبل بنودها) */
+    r.ord = cur.img && cur.img.ord !== undefined ? cur.img.ord * 1000 + 500 + (++cur.n) : Infinity;
     const k = cur.date + '|' + cur.vou;
     if (!byKey.has(k)) { const v = { date: cur.date, voucher: cur.vou, rows: [] }; byKey.set(k, v); vouchers.push(v); }
     byKey.get(k).rows.push(r);
   }
   vouchers.sort((a, b) => (a.date + a.voucher).localeCompare(b.date + b.voucher));
+  /* ترتيب البنود حسب الشات: كلام، صورة، كلام… (sort ثابت — بلا ord بتضل مكانها) */
+  for (const v of vouchers) {
+    const idx = new Map(v.rows.map((r, i) => [r, i]));
+    v.rows.sort((a, b) => ((a.ord ?? Infinity) - (b.ord ?? Infinity)) || (idx.get(a) - idx.get(b)));
+  }
   if (outside.length) log.push(`ℹ️ ${outside.length} صورة بملف الصور مش بالفترة (أو مش بالشات): ${outside.join(' ')}`);
   return log;
 }
