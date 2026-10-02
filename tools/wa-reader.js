@@ -136,11 +136,12 @@ function splitMessages(txt, order) {
 /* رسائل/أسطر ما إلها علاقة بالسندات */
 const SKIP_MSG = /^(?:This message was deleted|You deleted this message|تم حذف هذه الرسالة|حذفت هذه الرسالة|Messages and calls are end-to-end encrypted|.*\b(?:created group|created the group|added|joined using|left|removed|changed the (?:group|subject|group icon))\b)/i;
 const MEDIA_RE = /<(?:image|video|audio|sticker|GIF|document|Media) omitted>|<attached:\s*([^>]+)>|([^\s<>]+\.(?:jpe?g|png|webp|heic|opus|mp4|pdf))(?:\s*\((?:file attached|ملف مرفق)\))?/i;
+const stripMedia = t => t.replace(/<attached:[^>]+>/gi, ' ').replace(MEDIA_RE, ' ').trim();
 /* رسالة سعر/كمية بلا صنف: «١٣ونص» «٢٣ وربع» */
 const PRICE_ONLY = /^[\d.\s]*(?:و\s*نص|و\s*ربع|ونص|وربع)?[\d.\s]*(?:دينار)?$/;
 
 /* ---------- تجهيز سطر قبل parseLine ---------- */
-const CONTAINER = /(?:^|\s)(?:سطل|سظل|سطول|كرتون[ةه]?|كراتين|جاط|جاطات|(?<!خيار\s*(?:بيبي\s*)?)(?:قناني|قنين[ةه])|(?<!مشوي\s*)تنك[ةه]?)(?=\s|\d|$)/g;
+const CONTAINER = /(?:^|\s)(?:سطل|سظل|سطول|كرتون[ةه]?|كراتين|جاط|جاطات|(?<!خيار\s*(?:بيبي\s*)?)(?:قناني|قنين[ةه])|(?<!مشوي\s*)تنك[ةه]?|مرتبان(?!\s*صيني))(?=\s|\d|$)/g;
 const HAS_CONTAINER = /(?:^|\s)(?:سطل|سظل|سطول|جاط|جاطات)(?=\s|\d|$)/;
 const EXTRA = /(?:^|\s)(?:ikram|اكرام|كبير|صغير|عين[ةه]|ذمم|مستعمل|تجاري|عرض|بدل|مع\s+كياس|\+\s*كيس|بدون\s+[فق]اتور[ةه])(?=\s|$)|بيد\s+\S+.*$|مسجلهم.*$|من\s+الوحدات.*$/gi;
 const UNIT_TOK = 'كيلو|كغم|كغ|كجم|لتر|غرام|غم|غ|ك';
@@ -148,15 +149,27 @@ function prepLine(line) {
   let s = line.trim();
   let price = null, priceNote = '', bonus = false;
   s = s.replace(/^\[Forwarded\]\s*/i, '').replace(/^[+＋]\s*/, '');
+  /* أخطاء كتابة متكررة: «مشرخ» «مع حزر» «مشرح الفلح» «مكسكي» ، ونقطة بعد كلمة أو رقم */
+  s = s.replace(/مشرخ/g, 'مشرح').replace(/(^|\s)(مع\s+|محشي\s+|بال?)حزر(?=\s|\d|$)/g, '$1$2جزر')
+       .replace(/(^|\s)ال?فلح(?=\s|$)/g, '$1المفلح').replace(/مكسكي/g, 'مكسيكي')
+       .replace(/([؀-ۿ\d])\.(?=\s|$)/g, '$1').replace(/(?:^|\s)(?:بل\s*مي|بالمي|بالمية)(?=\s|$)/g, ' ');
+  /* «مشرح المفلح كرتون ١ ١٠ك» = كرتونة مفلح مشرح 9.36ك */
+  s = s.replace(/(?:^|\s)(?:مشرح\s+المفلح|مفلح\s+مشرح)(.*?)(^|\s|\d)10(?:ك|كيلو)(?=\s|$)/, (m, mid, b) => ` مفلح مشرح${mid}${b}9.36ك`);
+  /* «جاطات ٤١ فارغ» = جاط فارغ 41 */
+  s = s.replace(/(?:^|\s)(سطل|سطول|جاط|جاطات)\s+(\d+)\s+فارغ(?=\s|$)/, (m, c, n) => ` ${/^سط/.test(c) ? 'سطل' : 'جاط'} فارغ ${n}`);
   /* «بونص» = بضاعة مجانية — منسجلها مع ملاحظة */
   s = s.replace(/(\d)?\s*بونص/g, (m, d) => { bonus = true; return d ? d + ' ' : ' '; });
   /* «١٠ ك» → «10ك» ، «٧٠٠ غرام» → «700غ» */
   s = s.replace(new RegExp('(\\d+(?:\\.\\d+)?)\\s+(' + UNIT_TOK + ')(?=\\s|$)', 'g'), '$1$2')
        .replace(/(\d+(?:\.\d+)?)\s*غرام/g, '$1غ');
+  /* «الف جاط» = 1000 جاط */
+  s = s.replace(/(^|\s)(?:الف|ألف)(?=\s)/g, '$11000');
   /* «٥حبات» «٥٠حبة» = عدد ، «٥٠٠٠تالاف» = 5000 */
   s = s.replace(/(\d+)\s*(?:حبات|حبه|حبة)(?=\s|$)/g, '$1').replace(/(\d)\s*(?:ت?الاف|آلاف)(?=\s|$)/g, '$1');
   /* «٢ك ونص» «٢كيلو ونص» = 2.5 */
   s = s.replace(/(\d+(?:\.\d+)?)\s*(ك|كيلو|كغ)\s*و\s*نص(?=\s|$)/g, (m, n, u) => (+n + 0.5) + 'ك');
+  /* «كيلو ونص» بلا رقم = 1.5ك */
+  s = s.replace(/(^|\s)(?:كيلو|ك)\s*و\s*نص(?=\s|$)/g, '$11.5ك');
   /* «9360ك» = 9.360ك ، «17200ك» = 17.2ك (فاصلة الآلاف ضايعة) */
   s = s.replace(/(\d{4,5})(ك|كيلو)(?![؀-ۿ])/g, (m, n) => (+n / 1000) + 'ك');
   /* سعر صريح: «١٩دينار» */
@@ -241,13 +254,18 @@ function chatToVouchers(app, msgs, opt) {
 
     let text = m.text.replace(/^\[Forwarded\]\s*/i, '');
     let img = null;
-    const med = text.match(MEDIA_RE);
+    /* «<This message was edited>» علامة واتساب، مش جزء من البند */
+    text = text.replace(/\s*<(?:This message was edited|تم تعديل هذه الرسالة|تم تعديل الرسالة)>/gi, '').trim();
+    /* «<attached: …>» أولًا — تعليق المستند فيه اسم ملف ثاني («…FrmQR.pdf • 1 page») */
+    const med = text.match(/<attached:\s*([^>]+)>/i) || text.match(MEDIA_RE);
     if (med) {
       img = { date: m.date, time: m.time, sender: m.sender,
-        file: (med[1] || med[2] || '').trim(), caption: text.replace(MEDIA_RE, ' ').trim(), notes: [] };
+        file: (med[1] || med[2] || '').trim(), caption: stripMedia(text), notes: [] };
       log.images.push(img);
       lastImg = img;
-      text = text.replace(MEDIA_RE, ' ').trim();
+      text = stripMedia(text);
+      /* تعليق المستند هو اسم الملف («الخربة269 - …pdf • 1 page») — مش بنود */
+      if (/\.(?:pdf|docx?|xlsx?)$/i.test(img.file)) { img.caption = ''; img.doc = true; text = ''; }
       if (!text) continue;
     }
 
@@ -339,10 +357,11 @@ function chatToVouchers(app, msgs, opt) {
      # 00003015-PHOTO-2026-09-08-11-49-43.jpg إخراج
      مشكل 5 10ك
      مكسيكي 3 7ك
-   التاريخ = تاريخ رسالة الصورة (أو @2026-09-08 بالعنوان). سطر يبدأ بـ ; = ملاحظة. */
+   التاريخ = تاريخ رسالة الصورة (أو @2026-09-08 بالعنوان). سطر يبدأ بـ ; = تعليق.
+   بآخر البند: «@23.25» سعر مكتوب، «!نص» تنبيه للمراجعة. */
 function mergePhotos(app, vouchers, images, text) {
   const byKey = new Map(vouchers.map(v => [v.date + '|' + v.voucher, v]));
-  const log = [];
+  const log = [], outside = [];
   let cur = null;
   for (const raw of text.split(/\r?\n/)) {
     const ln = raw.trim();
@@ -354,21 +373,30 @@ function mergePhotos(app, vouchers, images, text) {
       const ref = h.split(/\s+/)[0];
       const img = images.find(i => i.file && (i.file === ref || i.file.startsWith(ref)));
       const date = dm ? dm[1] : (img && img.date);
-      if (!date) { log.push(`⚠️ ما لقيت تاريخ للصورة ${ref}`); cur = null; continue; }
+      /* صورة مش بالفترة المطلوبة (--from/--to) — منتخطاها بهدوء */
+      if (!date) { outside.push(ref); cur = null; continue; }
       cur = { ref, date, vou, img };
       continue;
     }
     if (!cur) continue;
+    /* «… @23.25» = سعر مكتوب (بالرسالة أو الوصل)، «… !ملاحظة» = ملاحظة للمراجعة */
+    let body = ln, price = null, note = '';
+    body = body.replace(/\s!(.+)$/, (m, t) => { note = t.trim(); return ''; });
+    body = body.replace(/\s@(\d+(?:\.\d+)?)\s*$/, (m, n) => { price = +n; return ''; });
     const ctx = { day: '', voucher: cur.vou, date: cur.date, cancelLast: false };
-    const r = app.call('parseLine', ln, ctx);
+    const r = app.call('parseLine', body, ctx);
     if (!r) { log.push(`⚠️ ${cur.ref}: «${ln}» ما انقرى`); continue; }
-    r.original = ln; r.src = 'image'; r.day = app.call('dayNameOf', cur.date);
+    if (price !== null) { r.price = price; r.priceFromMsg = true;
+      r.notes = (r.notes ? r.notes + ' • ' : '') + 'السعر من الرسالة/الوصل'; }
+    if (note) r.notes = (r.notes ? r.notes + ' • ' : '') + '⚠️ ' + note;
+    r.original = body; r.src = 'image'; r.day = app.call('dayNameOf', cur.date);
     r.msgTime = cur.img ? cur.img.time : ''; r.msgHead = '📷 ' + cur.ref;
     const k = cur.date + '|' + cur.vou;
     if (!byKey.has(k)) { const v = { date: cur.date, voucher: cur.vou, rows: [] }; byKey.set(k, v); vouchers.push(v); }
     byKey.get(k).rows.push(r);
   }
   vouchers.sort((a, b) => (a.date + a.voucher).localeCompare(b.date + b.voucher));
+  if (outside.length) log.push(`ℹ️ ${outside.length} صورة بملف الصور مش بالفترة (أو مش بالشات): ${outside.join(' ')}`);
   return log;
 }
 

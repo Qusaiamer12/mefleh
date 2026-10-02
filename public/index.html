@@ -1011,6 +1011,9 @@ function applyBusinessRules(rawName){
   const notes=[];
   for(const [re,canon] of SYNONYMS){
     if(re.test(n)){
+      /* الاسم أصلًا هو الاسم المعتمد («مصري مشرح سادة») — ما نكرره «مصري مصري …» */
+      const m=n.match(new RegExp(re.source, re.flags.replace('g',''))), ci=n.indexOf(norm(canon));
+      if(m && ci>=0 && m.index>=ci && m.index+m[0].length<=ci+norm(canon).length){ n=n.slice(0,ci)+canon+n.slice(ci+norm(canon).length); break; }
       const newVal = n.replace(new RegExp(re.source, re.flags), canon).replace(/\s+/g, ' ').trim();
       if(key(n)!==key(newVal)) notes.push('وحّدته مع: '+canon);
       n=newVal; break;
