@@ -1026,6 +1026,10 @@ function applyBusinessRules(rawName){
   const isSuper=SUPER_RE.test(n);
   const keepSuper=isSuper && KEEP_SUPER.some(re=>re.test(n));
   if(keepSuper){
+    /* الاسم نفسه صنف سوبر بالقائمة («مشرح بالجزر سوبر») — منخليه زي ما هو */
+    const nj=n.replace(/(?:^|\s)(?:مع\s*|ب)?(?:ال)?جزر(?=\s|$)/,' بالجزر').replace(/\s+/g,' ').trim();
+    const exact=(Array.isArray(items)?items:[]).find(it=>{ const b=key(it.base||it.name); return b===key(n)||b===key(nj); });
+    if(exact) return {name:(exact.base||exact.name).trim(),notes};
     const fam=KEEP_SUPER.find(re=>re.test(n));
     const famName=(n.match(fam)||[''])[0];
     const canon=(famName+' سوبر').replace(/\s+/g,' ').trim();
