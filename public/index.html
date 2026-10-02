@@ -2686,9 +2686,16 @@ function loadExample(){
   $('raw').value='السبت\nبيبي 3 ك10 11.5\nجايبو 1 ك5\nمكدوس - 1 - 4 - 5.5\nالأحد\nزهرة 15 ك2.5';
   doParse();
 }
-function addRow(){
-  draft.rows.push({id:uid(),day:draft.day,item:'',qty:'',weight:'',price:'',total:'',notes:'إدخال يدوي',original:''});
+/* سطر جديد: بآخر السند، أو تحت سطر معيّن (at = رقم السطر اللي فوقه) */
+function addRow(at){
+  const below=(at===undefined||at===null)?null:draft.rows[at];
+  const r={id:uid(),day:below?below.day:draft.day,item:'',qty:'',weight:'',price:'',total:'',notes:'إدخال يدوي',original:''};
+  const ix=below?at+1:draft.rows.length;
+  draft.rows.splice(ix,0,r);
+  if(ROWQ){ ROWQ=''; }                 /* البحث بيخفي السطر الفاضي */
   drawRows();
+  const inp=document.querySelector(`#rowsBox tr[data-i="${ix}"] td.name input`);
+  if(inp){ inp.scrollIntoView({block:'center'}); inp.focus(); }
 }
 async function clearDraft(){
   if(draft.rows.length){
@@ -2744,7 +2751,8 @@ function drawRows(){
         <td><input type="number" step="any" value="${esc(r.price)}" style="width:85px" onchange="upd(${i},'price',this.value)"></td>
         <td data-f="total"><b>${r.total===''?'—':fx(r.total)}</b></td>
         <td data-f="notes" style="text-align:right;font-size:12.5px">${esc(r.notes)||'<span class="chip cOk">تمام</span>'}</td>
-        <td><button class="btn danger sm" onclick="delRow(${i})">حذف</button></td></tr>`).join('')
+        <td style="white-space:nowrap"><button class="btn blue sm" title="أضف سطر تحت هالسطر" onclick="addRow(${i})">+ تحته</button>
+          <button class="btn danger sm" onclick="delRow(${i})">حذف</button></td></tr>`).join('')
         ||'<tr><td colspan="10">ما في بنود مطابقة</td></tr>'}
         <tr class="tot"><td colspan="5">الإجمالي</td><td id="sumQty">${fx(sum('qty'))}</td>
         <td></td><td id="sumTot">${fx(sum('total'))}</td><td colspan="2" id="warnChip">${warns?`<span class="chip cWarn">${warns} تنبيه</span>`:'<span class="chip cOk">لا تنبيهات</span>'}</td></tr>
@@ -2752,7 +2760,7 @@ function drawRows(){
     <datalist id="itemList">${items.map(i=>`<option value="${esc(labelOf(i))}">`).join('')}</datalist>
     <div class="row" style="margin-top:14px">
       <button class="btn big" onclick="saveDraft()">💾 احفظ السند <span class="kbd">Ctrl+S</span></button>
-      <button class="btn blue" onclick="addRow()">+ سطر</button>
+      <button class="btn blue" onclick="addRow()">+ سطر بالآخر</button>
     </div>
     ${lastSkipped.length?skipBox():''}
   </div>`;
