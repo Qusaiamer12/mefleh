@@ -13,7 +13,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     match /wh_sync/{doc} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      /* الكتابة بس على مفاتيح النظام (wh_…) وبنفس شكل القطع اللي بيكتبها
+         التطبيق — ما بينفع تُستخدم كمخزن عام لأي بيانات ثانية */
+      allow create, update: if request.auth != null
+        && doc.matches('wh_[a-z0-9_]+')
+        && request.resource.data.keys().hasOnly(['chunks', 'len', 't', 'i', 'd'])
+        && (!('d' in request.resource.data) || request.resource.data.d is string);
+      allow delete: if request.auth != null && doc.matches('wh_[a-z0-9_]+');
     }
 
     /* رفض صريح لأي شي ثاني */

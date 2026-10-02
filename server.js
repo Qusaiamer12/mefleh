@@ -24,6 +24,10 @@ try {
 const express = require('express');
 
 const app = express();
+/* ورا بروكسي رندر: req.ip = عنوان العميل اللي أضافه البروكسي نفسه
+   (مش أول قيمة بـ x-forwarded-for — هاي العميل بيقدر يزوّرها) */
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
+app.disable('x-powered-by');
 const PORT = process.env.PORT || 3000;
 const PROXY_TOKEN = process.env.AI_PROXY_TOKEN || '';
 const ORIGINS = (process.env.ALLOWED_ORIGINS || '*')
@@ -100,8 +104,7 @@ app.post('/api/ai/:provider', async (req, res) => {
     if (PROXY_TOKEN && req.headers['x-ai-token'] !== PROXY_TOKEN)
       return res.status(401).json({ error: { message: 'توكن البروكسي غير صحيح' } });
 
-    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
-             || req.socket.remoteAddress || '';
+    const ip = req.ip || req.socket.remoteAddress || '';
     if (!rateOk(ip))
       return res.status(429).json({ error: { message: 'طلبات كثيرة — جرّب بعد شوية' } });
 
@@ -117,19 +120,22 @@ app.post('/api/ai/:provider', async (req, res) => {
     if (!payload.model || !Array.isArray(payload.messages))
       return res.status(400).json({ error: { message: 'طلب ناقص (model/messages)' } });
 
-    /* تحليل الصور بيطوّل — نعطي المزوّد 110 ثواني قبل ما نستسلم */
+    /* تحليل الصور بيطوّل — نعطي المزوّد 110 ثواني (للرد كامل) قبل ما نستسلم */
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 110000);
-    const up = await fetch(pv.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json',
-                 'Authorization': 'Bearer ' + pv.key },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    });
-    clearTimeout(timer);
-
-    const text = await up.text();
+    let up, text;
+    try {
+      up = await fetch(pv.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json',
+                   'Authorization': 'Bearer ' + pv.key },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal,
+      });
+      text = await up.text();
+    } finally {
+      clearTimeout(timer);
+    }
     res.status(up.status).type('application/json').send(text);
   } catch (e) {
     const aborted = e && e.name === 'AbortError';
@@ -142,6 +148,7 @@ app.post('/api/ai/:provider', async (req, res) => {
 
 /* ---------- تقديم الواجهة (خيار: خدمة وحدة تستضيف الكل) ---------- */
 app.use(express.static(path.join(__dirname, 'public')));
+app.all('/api/*', (req, res) => res.status(404).json({ error: { message: 'مسار غير موجود' } }));
 app.get('*', (req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'index.html')));
 

@@ -560,7 +560,9 @@ const BADGE = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwgHBg
 
 /* ---------- أدوات ---------- */
 const $ = id => document.getElementById(id);
-const esc = s => String(s??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const esc = s => String(s??'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+/* معامل نصي آمن داخل onclick="…": JSON للجافاسكربت ثم esc للـ HTML */
+const jsArg = s => esc(JSON.stringify(String(s??'')));
 /* ===== التاريخ والمنطقة الزمنية =====
    toISOString بترجّع UTC — بالأردن (+3) هاد بيخلي السند بعد 9 مساءً
    ينحسب على اليوم اللي بعده. لهيك منستخدم التاريخ المحلي دائمًا. */
@@ -739,13 +741,19 @@ let notes    = load(LS.notes,[]);   /* الإشعارات */
 let ledger   = load(LS.led,[]);     /* كشوفات حساب الزبائن الخاصين (له/عليه) */
 let lclients = load(LS.lcl,[]);     /* دفتر زبائن كل مستخدم */
 
-/* الحسابات المعتمدة — تُزرع أول تشغيل وتُدمج مع أي إعدادات قديمة محفوظة */
+/* الحسابات المعتمدة — تُزرع أول تشغيل وتُدمج مع أي إعدادات قديمة محفوظة.
+   ما في كلمات سر صريحة بالكود: بس تجزئة PBKDF2، والحساب الجديد مطالب يغيّرها. */
 const SEED_USERS=[
-  {id:'u_qusai',user:'Qusai',name:'قصي',role:'admin',    customer:'',      seedPw:'Qqq**123'},
-  {id:'u_ammar',user:'Ammar',name:'عمار',role:'customer',customer:'عمار',  seedPw:'Amr@2026'},
-  {id:'u_islam',user:'Islam',name:'اسلام',role:'customer',customer:'اسلام',seedPw:'Isl#7741'},
-  {id:'u_bilal',user:'Bilal',name:'بلال',role:'customer',customer:'بلال',  seedPw:'Blal$309'},
-  {id:'u_saad', user:'Saad', name:'سعد', role:'customer',customer:'سعد',   seedPw:'Sd!5528m'}
+  {id:'u_qusai',user:'Qusai',name:'قصي',role:'admin',    customer:'',      salt:'hWwcRNQrWVDG',
+   hash:'p2$86c94d55e46d2020a925313aa0cfd26822219238d53ba8dddb8919512b499852',mustChange:true},
+  {id:'u_ammar',user:'Ammar',name:'عمار',role:'customer',customer:'عمار',  salt:'YaSaX8aFm4Kc',
+   hash:'p2$b851c4f8a216ae834cf441995717e0e9a70456092835837737be6891d2247a5d',mustChange:true},
+  {id:'u_islam',user:'Islam',name:'اسلام',role:'customer',customer:'اسلام',salt:'YgV-LDrNJJYi',
+   hash:'p2$22023a326769cd258c6ba316e9928429e6dd28d4811de180ac11b4972af20d38',mustChange:true},
+  {id:'u_bilal',user:'Bilal',name:'بلال',role:'customer',customer:'بلال',  salt:'qnPfN3ogtui-',
+   hash:'p2$743f6d792e8c99c485b3a0bafc2dd6cad1957bfe7d39f5696c10fb4c1b8441ab',mustChange:true},
+  {id:'u_saad', user:'Saad', name:'سعد', role:'customer',customer:'سعد',   salt:'q8U792GLIDhw',
+   hash:'p2$60b5571d007d98a733e1ad5e57ebab33e0e39f8c506d5cacbf59ea5e2123853d',mustChange:true}
 ];
 if(!settings) settings={customers:[
   {name:'اسلام',code:'ISL'},{name:'بلال',code:'BLAL'},
@@ -1056,7 +1064,7 @@ const DEFAULT_SIZE={
   'شيري محشي لبنة':5,'محشي لبنة':5,'مشوي محشي لبنة':5,'اسود محشي لبنة':5,
   'ورق عنب محشي لبنة':5,'فلفل مكسيكي محشي لبنة':5,'اخضر محشي لبنة':5,
   'مصري مشرح سادة':10,'دوالي':8,'ذرة':10,'مفلح مشرح':9.36,
-  'مشرح اخضر':10,'مخلي اخضر':10,'مشكل':10,
+  'مشرح اخضر':10,'مخلي اخضر':10,
   'مكسيكي':7,'فلفل مكسيكي':7,'روزمري':6,'جاط':4,'جاط فارغ':4
 };
 function defaultSizeFor(baseName){
@@ -1711,7 +1719,46 @@ async function hashPw(pw,salt){
     return 'x'+Math.abs(h).toString(16);
   }
 }
-function newSalt(){ return Math.random().toString(36).slice(2,10); }
+function newSalt(){
+  try{ const b=crypto.getRandomValues(new Uint8Array(12));
+    return [...b].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+  catch(e){ return Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10); }
+}
+/* كلمة سر مؤقتة عشوائية (للحسابات الجديدة وإعادة التعيين) */
+function tempPw(){
+  const A='abcdefghjkmnpqrstuvwxyz23456789';
+  try{ return [...crypto.getRandomValues(new Uint8Array(8))].map(x=>A[x%A.length]).join(''); }
+  catch(e){ return Math.random().toString(36).slice(2,10); }
+}
+/* PBKDF2 (100 ألف دورة) — أصعب بكثير على التخمين من SHA-256 مرة وحدة.
+   التجزئات القديمة بتضل شغالة وبتترقّى تلقائيًا أول دخول ناجح. */
+const PW_ITER=100000;
+async function hashPw2(pw,salt){
+  const enc=new TextEncoder();
+  const k=await crypto.subtle.importKey('raw',enc.encode(String(pw)),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits(
+    {name:'PBKDF2',hash:'SHA-256',salt:enc.encode(String(salt)),iterations:PW_ITER},k,256);
+  return 'p2$'+[...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function makePw(pw){
+  const salt=newSalt();
+  try{ return {salt,hash:await hashPw2(pw,salt)}; }
+  catch(e){ return {salt,hash:await hashPw(pw,salt)}; }   /* متصفح بلا PBKDF2 */
+}
+async function checkPw(rec,pw){
+  if(!rec||!rec.hash) return false;
+  if(String(rec.hash).startsWith('p2$')){
+    try{ return (await hashPw2(pw,rec.salt))===rec.hash; }catch(e){ return false; }
+  }
+  return (await hashPw(pw,rec.salt))===rec.hash;
+}
+/* كلمات سر كانت مكتوبة صريحة بالكود (تسرّبت) — أي حدا بيدخل فيها لازم يغيّرها */
+const LEAKED_PW=new Set(["3e2e8669d97ce58a19d44e3edeabe139969646a8d7e59dd917bd50ec8243961e", "0c12313fc3d8e953537ae48b60491decaec865eed12b7cd997c8df75c4018e77", "d90429240dde98edfe2878217afd8b3bb8a4b664df5d1eb1d9ddb394878592f3", "0193a67cdc4e78a2df851eabb2002414c7a325a567e7e3ce53a227c41c63236a", "c41527d291f48961da575d36f022e95b35095d820f1600a6c735bbdd96c9458b"]);
+async function isLeakedPw(pw){
+  try{ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(pw)));
+    return LEAKED_PW.has([...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')); }
+  catch(e){ return false; }
+}
 
 function usersList(){ settings.users=settings.users||[]; return settings.users; }
 
@@ -1720,21 +1767,19 @@ async function ensureAdmin(){
   const u=usersList();
   let changed=false;
   for(const x of u){
-    if(x.seedPw){
-      x.salt=newSalt();
-      x.hash=await hashPw(x.seedPw,x.salt);
+    if(x.seedPw){                   /* إعدادات قديمة لسه فيها كلمة سر صريحة */
+      Object.assign(x,await makePw(x.seedPw));
       x.shown=x.seedPw;             /* نسخة ظاهرة للمدير حسب طلبه */
       x.setBy='المدير';
       delete x.seedPw;
-      x.mustChange=false;
+      x.mustChange=true;
       changed=true;
     }
   }
   /* شبكة أمان: لو ما ضل ولا مدير */
   if(!u.some(x=>x.role==='admin')){
-    const salt=newSalt();
-    u.push({id:uid(),user:'admin',name:'المدير',role:'admin',customer:'',
-            salt,hash:await hashPw('admin',salt),mustChange:true});
+    u.push(Object.assign({id:uid(),user:'admin',name:'المدير',role:'admin',customer:'',mustChange:true},
+            await makePw('admin')));
     changed=true;
   }
   if(changed) saveSet();
@@ -1769,8 +1814,14 @@ async function doLogin(){
   const box=$('lgMsg');
   const rec=usersList().find(x=>String(x.user).toLowerCase()===u);
   if(!rec){ box.innerHTML='<div class="note">⚠️ اسم المستخدم أو كلمة السر غلط</div>'; return; }
-  const h=await hashPw(pw,rec.salt);
-  if(h!==rec.hash){ box.innerHTML='<div class="note">⚠️ اسم المستخدم أو كلمة السر غلط</div>'; return; }
+  if(!(await checkPw(rec,pw))){ box.innerHTML='<div class="note">⚠️ اسم المستخدم أو كلمة السر غلط</div>'; return; }
+  /* ترقية التجزئة القديمة + إجبار تغيير كلمة سر مسرّبة — بدون ما نلمس باقي الحساب */
+  let upd=false;
+  if(!String(rec.hash).startsWith('p2$')){
+    try{ const n=await makePw(pw); if(String(n.hash).startsWith('p2$')){ Object.assign(rec,n); upd=true; } }catch(e){}
+  }
+  if(!rec.mustChange && await isLeakedPw(pw)){ rec.mustChange=true; upd=true; }
+  if(upd) saveSet();
   SESSION={user:rec.user,name:rec.name||rec.user,role:rec.role,customer:rec.customer||'',id:rec.id};
   try{ sessionStorage.setItem('wh_session',JSON.stringify(SESSION)); }catch(e){}
   logAction('دخول',null,rec.user);
@@ -1870,11 +1921,12 @@ async function promptChangePw(forced){
   if(!ok) return;
   const V=(ok&&ok.vals)||{};
   const a=String(V.__pw1||''), b=String(V.__pw2||'');
-  if(!a||a.length<4){ notify('كلمة السر لازم 4 خانات على الأقل','warn'); return promptChangePw(forced); }
+  if(!a||a.length<6){ notify('كلمة السر لازم 6 خانات على الأقل','warn'); return promptChangePw(forced); }
+  if(await isLeakedPw(a)){ notify('هاي كلمة سر مكشوفة — اختار غيرها','warn'); return promptChangePw(forced); }
   if(a!==b){ notify('الكلمتين مش متطابقات','warn'); return promptChangePw(forced); }
   const rec=usersList().find(x=>x.id===SESSION.id);
   if(!rec) return;
-  rec.salt=newSalt(); rec.hash=await hashPw(a,rec.salt); rec.mustChange=false;
+  Object.assign(rec,await makePw(a)); rec.mustChange=false;
   rec.shown=a;                       /* تظهر بقائمة المدير */
   rec.setBy=rec.name||rec.user;      /* مين غيّرها */
   rec.changedAt=new Date().toLocaleString('ar-JO');
@@ -1944,7 +1996,7 @@ function render(){
   buildTabs();
   if(!TABS.some(t=>t[0]===TAB)) TAB=TABS[0][0];
   $('nav').innerHTML=`<div class="navTitle">${isAdmin()?'الأقسام':'حسابي'}</div>`
-    +TABS.map(([k,l])=>`<button class="${k===TAB?'active':''}" onclick="go('${k}')">${l}</button>`).join('')
+    +TABS.map(([k,l])=>`<button class="${k===TAB?'active':''}" onclick="go(${jsArg(k)})">${l}</button>`).join('')
     +`<div class="navFoot">
         <div class="navUser">👤 ${esc(SESSION.name)}${isAdmin()?' <span class="roleTag">مدير</span>':''}</div>
         <button class="navOut" onclick="doLogout()">تسجيل خروج</button>
@@ -1974,11 +2026,11 @@ function vRequests(){
     </div>
   </div>
   ${L.length?L.map(q=>`
-    <div class="card reqCard ${q.status}">
+    <div class="card reqCard ${esc(q.status)}">
       <div class="reqTop">
-        <div><b>${esc(q.item)}</b> ${q.weight??''}${esc(q.unit||'')}
+        <div><b>${esc(q.item)}</b> ${esc(q.weight??'')}${esc(q.unit||'')}
           <span class="mut"> — سند ${esc(q.invNo)} · ${esc(q.customer)}</span></div>
-        <span class="stTag ${q.status}">${q.status==='pending'?'معلّق':q.status==='approved'?'تمت الموافقة':'مرفوض'}</span>
+        <span class="stTag ${esc(q.status)}">${q.status==='pending'?'معلّق':q.status==='approved'?'تمت الموافقة':'مرفوض'}</span>
       </div>
       <div class="reqBody">
         <div class="priceFlow"><span class="old">${fx(q.oldPrice)}</span> ←
@@ -1989,9 +2041,9 @@ function vRequests(){
           ${q.decidedAt?`<br>القرار: ${esc(q.decidedBy)} · ${esc(q.decidedAt)}`:''}</div>
       </div>
       ${q.status==='pending'?`<div class="row" style="margin-top:10px">
-        <button class="btn" onclick="approveReq('${q.id}')">✅ وافق</button>
-        <button class="btn danger" onclick="rejectReq('${q.id}')">✖ ارفض</button>
-        <button class="btn sec sm" onclick="go('invoices');setTimeout(()=>viewInv('${q.invId}'),80)">شوف السند</button>
+        <button class="btn" onclick="approveReq(${jsArg(q.id)})">✅ وافق</button>
+        <button class="btn danger" onclick="rejectReq(${jsArg(q.id)})">✖ ارفض</button>
+        <button class="btn sec sm" onclick="go('invoices');setTimeout(()=>viewInv(${jsArg(q.invId)}),80)">شوف السند</button>
       </div>`:''}
     </div>`).join('')
     :'<div class="card">ما في طلبات بهذا التصنيف.</div>'}`;
@@ -2023,7 +2075,7 @@ function vMessages(){
     <div class="row">${others.map(u=>{
       const n=unreadFrom(u.user);
       return `<button class="btn ${String(u.user).toLowerCase()===peer?'':'sec'} sm"
-        onclick="msgWith='${esc(u.user)}';vMessages()">${esc(u.name||u.user)}${n?` <span class="badgeN">${n}</span>`:''}</button>`;
+        onclick="msgWith=${jsArg(u.user)};vMessages()">${esc(u.name||u.user)}${n?` <span class="badgeN">${n}</span>`:''}</button>`;
     }).join('')||'<span class="mut">ما في أعضاء آخرين</span>'}</div>
   </div>
   <div class="card">
@@ -2065,12 +2117,12 @@ function vAlerts(){
     ${L.length?`<div class="row"><button class="btn sec sm" onclick="clearNotes()">مسح الكل</button></div>`:''}
   </div>
   ${L.length?L.map(n=>`
-    <div class="card noteCard ${n.kind} ${n.read?'':'fresh'}">
+    <div class="card noteCard ${esc(n.kind)} ${n.read?'':'fresh'}">
       <div class="reqTop"><b>${esc(n.title)}</b>
         <span class="mut" style="font-size:11.5px">${esc(n.t)}</span></div>
       ${n.body?`<div style="margin-top:6px">${esc(n.body)}</div>`:''}
       ${n.link?`<div class="row" style="margin-top:9px">
-        <button class="btn sec sm" onclick="go('${n.link}')">فتح</button></div>`:''}
+        <button class="btn sec sm" onclick="go(${jsArg(n.link)})">فتح</button></div>`:''}
     </div>`).join('')
     :'<div class="card">ما في إشعارات.</div>'}`;
   setTimeout(()=>{ markNotesRead(); buildTabs();
@@ -2118,7 +2170,7 @@ function vLedger(){
       ${list.map(n=>{
         const r=clientRec(n)||{}, t=ledgerTotals(n);
         const on=(n===ledClient);
-        return `<div class="cliCard ${on?'on':''}" onclick="pickClient('${esc(n).replace(/'/g,"\\'")}')">
+        return `<div class="cliCard ${on?'on':''}" onclick="pickClient(${jsArg(n)})">
           <div class="cliTop">
             <b>${esc(n)}</b>
             <span class="cliBal ${t.balance>0?'owe':t.balance<0?'cred':''}">${fx(Math.abs(t.balance))}</span>
@@ -2130,8 +2182,8 @@ function vLedger(){
           </div>
           ${r.note?`<div class="cliNote">${esc(r.note)}</div>`:''}
           <div class="cliAct">
-            <button class="btn sec sm" onclick="event.stopPropagation();editClient('${esc(n).replace(/'/g,"\\'")}')">تعديل</button>
-            <button class="btn danger sm" onclick="event.stopPropagation();delClient('${esc(n).replace(/'/g,"\\'")}')">حذف</button>
+            <button class="btn sec sm" onclick="event.stopPropagation();editClient(${jsArg(n)})">تعديل</button>
+            <button class="btn danger sm" onclick="event.stopPropagation();delClient(${jsArg(n)})">حذف</button>
           </div>
         </div>`;}).join('')||'<div class="mut" style="padding:10px">ما في نتائج للبحث</div>'}
     </div>`:'<div class="okbox" style="margin-top:10px">ما عندك زبائن بعد — اضغط «+ زبون جديد».</div>'}
@@ -2299,7 +2351,7 @@ function drawLedger(){
       <td class="amt vOut">${d?fx(d):''}</td>
       <td class="amt vIn">${c?fx(c):''}</td>
       <td class="amt"><b>${fx(run)}</b></td>
-      <td class="noprint"><button class="btn danger sm" onclick="delLedRow('${e.id}')">حذف</button></td>
+      <td class="noprint"><button class="btn danger sm" onclick="delLedRow(${jsArg(e.id)})">حذف</button></td>
     </tr>`;}).join('');
   const bal=deb-cre;
   box.innerHTML=`
@@ -2683,10 +2735,10 @@ function drawRows(){
         <td>${i+1}</td>
         <td><input value="${esc(r.day)}" style="width:78px" onchange="upd(${i},'day',this.value)"></td>
         <td class="name"><input list="itemList" value="${esc(r.item)}" style="min-width:165px" onchange="upd(${i},'item',this.value)"></td>
-        <td><input type="number" step="any" value="${r.weight}" style="width:72px" onchange="upd(${i},'weight',this.value)"></td>
+        <td><input type="number" step="any" value="${esc(r.weight)}" style="width:72px" onchange="upd(${i},'weight',this.value)"></td>
         <td style="color:var(--mut)">${esc(r.unit||'—')}</td>
-        <td><input type="number" step="any" value="${r.qty}" style="width:72px" onchange="upd(${i},'qty',this.value)"></td>
-        <td><input type="number" step="any" value="${r.price}" style="width:85px" onchange="upd(${i},'price',this.value)"></td>
+        <td><input type="number" step="any" value="${esc(r.qty)}" style="width:72px" onchange="upd(${i},'qty',this.value)"></td>
+        <td><input type="number" step="any" value="${esc(r.price)}" style="width:85px" onchange="upd(${i},'price',this.value)"></td>
         <td data-f="total"><b>${r.total===''?'—':fx(r.total)}</b></td>
         <td data-f="notes" style="text-align:right;font-size:12.5px">${esc(r.notes)||'<span class="chip cOk">تمام</span>'}</td>
         <td><button class="btn danger sm" onclick="delRow(${i})">حذف</button></td></tr>`).join('')
@@ -2954,13 +3006,13 @@ function drawInv(){
     <thead><tr><th>رقم السند</th><th>التاريخ</th><th>الزبون</th><th>النوع</th>
       <th>البنود</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
     <tbody>${L.length?L.map(v=>`<tr>
-      <td><b>${esc(v.no)}</b>${v.review&&isAdmin()?' <span class="revTag" title="مستورد من واتساب — بحاجة مراجعة">🟡 واتساب</span>':''}</td><td>${v.date}</td><td>${esc(v.customer)}</td>
-      <td class="${v.voucher==='إخراج'?'vOut':'vIn'}">${v.voucher}</td>
+      <td><b>${esc(v.no)}</b>${v.review&&isAdmin()?' <span class="revTag" title="مستورد من واتساب — بحاجة مراجعة">🟡 واتساب</span>':''}</td><td>${esc(v.date)}</td><td>${esc(v.customer)}</td>
+      <td class="${v.voucher==='إخراج'?'vOut':'vIn'}">${esc(v.voucher)}</td>
       <td>${v.rows.length}</td><td><b>${fx(v.total)}</b></td>
       <td>
-        <button class="btn blue sm" onclick="viewInv('${v.id}')">عرض</button>
-        ${(isAdmin() || v.customer === myCustomer())?`<button class="btn sm" onclick="editInv('${v.id}')">تعديل</button>
-        <button class="btn danger sm" onclick="delInv('${v.id}')">حذف</button>`:''}
+        <button class="btn blue sm" onclick="viewInv(${jsArg(v.id)})">عرض</button>
+        ${(isAdmin() || v.customer === myCustomer())?`<button class="btn sm" onclick="editInv(${jsArg(v.id)})">تعديل</button>
+        <button class="btn danger sm" onclick="delInv(${jsArg(v.id)})">حذف</button>`:''}
       </td></tr>`).join(''):'<tr><td colspan="7">لا يوجد سندات</td></tr>'}</tbody>
     </table></div>
   </div>
@@ -2973,16 +3025,16 @@ function viewInv(id){
   $('invDetail').innerHTML=`<div class="card watermark">
     <div class="statementHeader"><img class="reportLogo" src="${BADGE}" alt="ALMEFLEH">
       <h2 style="color:var(--g)">سند ${esc(v.voucher)} — ${esc(v.no)}</h2></div>
-    <p class="hint">${esc(v.customer)} • ${v.date}</p>
+    <p class="hint">${esc(v.customer)} • ${esc(v.date)}</p>
     <div class="tw"><table><thead><tr><th>#</th><th>اليوم</th><th>الصنف</th><th>الوزن</th>
     <th>الوحدة</th><th>العدد</th><th>سعر العبوة</th><th>الإجمالي</th></tr></thead><tbody>
     ${v.rows.map((r,i)=>{
       const pend=reqs.find(q=>q.invId===v.id&&q.rowId===r.id&&q.status==='pending');
       return `<tr>
       <td>${i+1}</td><td>${esc(r.day)}</td><td class="name">${esc(r.item)}</td>
-      <td>${r.weight}</td><td>${esc(r.unit||'—')}</td><td>${r.qty}</td>
+      <td>${esc(r.weight)}</td><td>${esc(r.unit||'—')}</td><td>${esc(r.qty)}</td>
       <td class="priceCell ${pend?'pendPrice':''}"
-          onclick="askPriceChange('${v.id}','${r.id}')" title="اضغط لطلب تعديل السعر">
+          onclick="askPriceChange(${jsArg(v.id)},${jsArg(r.id)})" title="اضغط لطلب تعديل السعر">
         ${fx(r.price)}
         ${pend?`<div class="pendTag">بانتظار الموافقة: ${fx(pend.newPrice)}</div>`
                :`<span class="editHint">✎</span>`}</td>
@@ -2994,7 +3046,7 @@ function viewInv(id){
       وعدّل من «تعديل» إذا في غلط.</div>`:''}
     <div class="row" style="margin-top:12px">
       <button class="btn blue" onclick="window.print()">🖨️ طباعة / PDF</button>
-      ${v.review&&isAdmin()?`<button class="btn" onclick="markReviewed('${v.id}')">✔ تمت المراجعة</button>`:''}
+      ${v.review&&isAdmin()?`<button class="btn" onclick="markReviewed(${jsArg(v.id)})">✔ تمت المراجعة</button>`:''}
     </div></div>`;
   try{ $('invDetail').scrollIntoView({behavior:'smooth'}); }catch(e){}
 }
@@ -3036,10 +3088,10 @@ async function askPriceChange(invId,rowId){
   if(dup){ notify('في طلب معلّق على هذا البند','warn'); return; }
 
   const ok=await ask({title:'طلب تعديل سعر',ok:'إرسال الطلب',
-    body:`<b>${esc(r.item)}</b> ${r.weight??''}${esc(r.unit||'')} — سند ${esc(v.no)}<br>
+    body:`<b>${esc(r.item)}</b> ${esc(r.weight??'')}${esc(r.unit||'')} — سند ${esc(v.no)}<br>
       السعر الحالي: <b>${fx(r.price)}</b><br><br>
       <label>السعر الجديد المطلوب</label>
-      <input id="__np" type="number" step="any" class="mInput" value="${r.price}">
+      <input id="__np" type="number" step="any" class="mInput" value="${esc(r.price)}">
       <label style="margin-top:8px">سبب التعديل (اختياري)</label>
       <input id="__nr" class="mInput" placeholder="مثال: السعر المتفق عليه 5.5">`});
   if(!ok) return;
@@ -3167,7 +3219,7 @@ function pubStatusBox(){
     <b>حالة النشر لأسبوع ${wk}:</b>
     <div class="pubRow">${rows.filter(r=>r.has).map(r=>
       `<span class="pubTag ${r.pub?'on':'off'}" title="${r.pub?'نُشر '+esc(r.pub.at):'ما اننشر بعد'}"
-        ${r.pub?`onclick="unpublishWeek('${esc(r.c).replace(/'/g,"\\'")}','${wk}')"`:''}>
+        ${r.pub?`onclick="unpublishWeek(${jsArg(r.c)},${jsArg(wk)})"`:''}>
         ${esc(r.c)} ${r.pub?'✅':'🔒'}</span>`).join('')}</div>
     <div class="hint" style="margin:6px 0 0">🔒 = الزبون لسه ما بيشوف سندات هذا الأسبوع.</div>
   </div>`;
@@ -3276,8 +3328,8 @@ function sectionTable(list,title,cls){
       if(i===0) out+=`<td class="dayCell ${dayCls}" rowspan="${g.rows.length}">
           <b>${esc(g.day||'—')}</b><div class="dDate">${esc(d)}</div></td>`;
       out+=`<td class="name">${esc(r.item)}</td>
-        <td>${r.weight??''}</td><td>${esc(r.unit||'—')}</td>
-        <td><b>${r.qty??''}</b></td><td>${fx(r.price)}</td>
+        <td>${esc(r.weight??'')}</td><td>${esc(r.unit||'—')}</td>
+        <td><b>${esc(r.qty??'')}</b></td><td>${fx(r.price)}</td>
         <td class="amt">${fx(r.total)}</td></tr>`;
     });
     /* مجموع اليوم */
@@ -3350,7 +3402,7 @@ function drawRep(){
       <thead><tr class="colHead"><th>الصنف</th><th>الوزن</th><th>الوحدة</th>
         <th>عدد الإخراج</th><th>قيمة الإخراج</th><th>عدد الإدخال</th><th>قيمة الإدخال</th><th>الصافي</th></tr></thead>
       <tbody>${aggList.map(a=>`<tr>
-        <td class="name">${esc(a.item)}</td><td>${a.size??''}</td><td>${esc(a.unit||'—')}</td>
+        <td class="name">${esc(a.item)}</td><td>${esc(a.size??'')}</td><td>${esc(a.unit||'—')}</td>
         <td>${a.outQ||''}</td><td class="vOut">${a.outV?fx(a.outV):''}</td>
         <td>${a.inQ||''}</td><td class="vIn">${a.inV?fx(a.inV):''}</td>
         <td class="amt"><b>${fx(a.outV-a.inV)}</b></td></tr>`).join('')}</tbody>
@@ -3509,8 +3561,8 @@ function exportExcel(){
         sum+=(+r.total||0);
         out+='<tr>';
         if(i===0) out+=`<td rowspan="${g.rows.length}" style="background:${bg};font-weight:bold;vertical-align:middle">${esc(g.day||'')}<br><span style="font-size:9px">${esc(d)}</span></td>`;
-        out+=`<td class="nm">${esc(r.item)}</td><td>${r.weight??''}</td><td>${esc(r.unit||'')}</td>
-          <td>${r.qty??''}</td><td>${fx(r.price)}</td><td>${fx(r.total)}</td></tr>`;
+        out+=`<td class="nm">${esc(r.item)}</td><td>${esc(r.weight??'')}</td><td>${esc(r.unit||'')}</td>
+          <td>${esc(r.qty??'')}</td><td>${fx(r.price)}</td><td>${fx(r.total)}</td></tr>`;
       });
       out+=`<tr class="ds"><td colspan="6">مجموع ${esc(g.day||d)}</td><td>${fx(sum)}</td></tr>`;
     });
@@ -3696,8 +3748,8 @@ function vSettings(){
         <td>${u.role==='admin'?'<span class="roleTag">مدير</span>':'زبون'}</td>
         <td>${esc(u.customer||'—')}</td>
         <td>
-          <button class="btn sec sm" onclick="resetPw('${u.id}')">كلمة سر جديدة</button>
-          ${u.role!=='admin'?`<button class="btn danger sm" onclick="delUser('${u.id}')">حذف</button>`:''}
+          <button class="btn sec sm" onclick="resetPw(${jsArg(u.id)})">كلمة سر جديدة</button>
+          ${u.role!=='admin'?`<button class="btn danger sm" onclick="delUser(${jsArg(u.id)})">حذف</button>`:''}
         </td></tr>`;}).join('')}
     </tbody></table></div>
     <div class="note" style="margin-top:10px">🔒 كلمات السر ظاهرة لك كمدير — الصفوف
@@ -3774,7 +3826,7 @@ function vSettings(){
       <thead><tr><th>الوقت</th><th>العنصر</th><th></th></tr></thead><tbody>
       ${trash.map(t=>`<tr><td style="font-size:12px">${esc(t.t)}</td>
         <td class="name">${esc(t.label)}</td>
-        <td><button class="btn sm" onclick="undoTrash('${t.id}')">استرجاع</button></td></tr>`).join('')}
+        <td><button class="btn sm" onclick="undoTrash(${jsArg(t.id)})">استرجاع</button></td></tr>`).join('')}
       </tbody></table></div>
       <div class="row" style="margin-top:10px">
         <button class="btn sec sm" onclick="emptyTrash()">تفريغ السلة</button></div>`
@@ -3861,13 +3913,12 @@ async function addUser(){
         user=rawUser? rawUser.charAt(0).toUpperCase()+rawUser.slice(1) : '',
         cust=$('nuCust').value;
   if(!name||!user){ notify('اكتب الاسم واسم المستخدم','warn'); return; }
-  if(usersList().some(x=>String(x.user).toLowerCase()===user)){
+  if(usersList().some(x=>String(x.user).toLowerCase()===user.toLowerCase())){
     notify('اسم المستخدم مستخدم مسبقًا','warn'); return; }
-  const pw=Math.random().toString(36).slice(2,8);
-  const salt=newSalt();
-  usersList().push({id:uid(),user,name,role:'customer',customer:cust,
-    salt,hash:await hashPw(pw,salt),shown:pw,setBy:'المدير',
-    changedAt:new Date().toLocaleString('ar-JO'),mustChange:true});
+  const pw=tempPw();
+  usersList().push(Object.assign({id:uid(),user,name,role:'customer',customer:cust,
+    shown:pw,setBy:'المدير',
+    changedAt:new Date().toLocaleString('ar-JO'),mustChange:true},await makePw(pw)));
   saveSet(); vSettings();
   say('تم إنشاء الحساب',
     `<b>${esc(name)}</b><br><br>
@@ -3882,8 +3933,8 @@ async function resetPw(id){
     body:`رح يتولّد كلمة سر جديدة لحساب <b>${esc(u.name||u.user)}</b>
       والقديمة ما بتشتغل بعدها.`});
   if(!ok) return;
-  const pw=Math.random().toString(36).slice(2,8);
-  u.salt=newSalt(); u.hash=await hashPw(pw,u.salt); u.mustChange=true;
+  const pw=tempPw();
+  Object.assign(u,await makePw(pw)); u.mustChange=true;
   u.shown=pw; u.setBy='المدير'; u.changedAt=new Date().toLocaleString('ar-JO');
   saveSet();
   say('كلمة السر الجديدة',
@@ -4138,7 +4189,7 @@ setInterval(()=>{ try{
   if(draft.rows.length) localStorage.setItem('wh_draft',JSON.stringify(draft));
   else localStorage.removeItem('wh_draft');
 }catch(e){} },4000);
-function recoverDraft(){ if(!isAdmin()) return; if(!IS_ADMIN) return;
+function recoverDraft(){ if(!isAdmin()) return;
   try{
     const d=JSON.parse(localStorage.getItem('wh_draft')||'null');
     if(d&&d.rows&&d.rows.length){
@@ -4194,7 +4245,9 @@ initNav();
   await ensureAdmin();
   try{
     const sv=JSON.parse(sessionStorage.getItem('wh_session')||'null');
-    if(sv && usersList().some(u=>u.id===sv.id)) SESSION=sv;
+    /* الصلاحية من سجل المستخدم نفسه — مش من التخزين (ما بينفع تزويرها بتعديل role) */
+    const rec=sv&&usersList().find(u=>u.id===sv.id&&String(u.user).toLowerCase()===String(sv.user||'').toLowerCase());
+    if(rec) SESSION={user:rec.user,name:rec.name||rec.user,role:rec.role,customer:rec.customer||'',id:rec.id};
   }catch(e){}
   if(SESSION) buildTabs();
   render();
@@ -4379,6 +4432,8 @@ async function fbPushNow(k){
   /* === مجموعات قابلة للدمج: اقرا-ادمج-اكتب بذرّية واحدة === */
   if(MERGEABLE.has(k)){
     const tom=tombs(k);
+    const sentTombs=new Set(tom);               /* الشواهد اللي انبعتت بهالدفعة */
+    let res=null;                               /* نتيجة آخر محاولة — الآثار الجانبية بعد النجاح بس */
     await FB.db.runTransaction(async t=>{
       const msnap=await t.get(FB.col.doc(k+'_m'));
       let remote=[];
@@ -4393,23 +4448,28 @@ async function fbPushNow(k){
       }
       const local=Array.isArray(raw)?raw:[];
       const merged=fbMerge(local,remote,tom);
-      /* لو السحابة فيها عناصر جديدة علينا: حدّث الذاكرة المحلية فورًا */
-      if(merged.length!==local.length){
-        setVar(k,merged);
-        try{ fbLocalSave(k,merged); }catch(e){}
-        fbRefreshUI();
-        const diff=merged.length-local.length;
-        if(diff>0) notify(`☁️ انضاف ${diff} سجل من جهاز ثاني`,'ok',3500);
-      }
       const json=JSON.stringify(merged);
       const n=Math.max(1,Math.ceil(json.length/FB_CHUNK));
       const oldN=(msnap&&msnap.exists&&msnap.data().chunks)||FB.nChunks[k]||0;
       fbChunkWrites((op,id,data)=>{ op==='set'?t.set(FB.col.doc(id),data):t.delete(FB.col.doc(id)); },
         k,json,n,oldN);
-      FB.last[k]=json; FB.nChunks[k]=n;
-      FB.syncIds[k]=idsOf(merged);
-      FB.tombs[k]=new Set();                     /* الشواهد اننفذت — امسحها */
+      /* فايربيس ممكن يعيد هالدالة أكثر من مرة — ما منلمس الحالة هون */
+      res={local,merged,json,n};
     });
+    /* نجحت الكتابة: هلأ بس منحدّث الذاكرة والشواهد */
+    const {local,merged,json,n}=res;
+    FB.last[k]=json; FB.nChunks[k]=n;
+    FB.syncIds[k]=idsOf(merged);
+    sentTombs.forEach(id=>tom.delete(id));       /* اللي انضاف بعد الإرسال بيضل للدفعة الجاية */
+    if(merged.length!==local.length){
+      /* السحابة كان فيها عناصر جديدة علينا — مع الحفاظ على أي إضافة محلية صارت أثناء الإرسال */
+      const fin=fbMerge(getVar(k),merged,tom);
+      setVar(k,fin);
+      try{ fbLocalSave(k,fin); }catch(e){}
+      fbRefreshUI();
+      const diff=merged.length-local.length;
+      if(diff>0) notify(`☁️ انضاف ${diff} سجل من جهاز ثاني`,'ok',3500);
+    }
     fbBadge('☁️ متصل','on','المزامنة السحابية شغالة');
     return;
   }
@@ -4767,5 +4827,5 @@ aiVision = async function(dataUrl) {
 };
 })();
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a20bff062d70420e',t:'MTc4NDk5MTIyNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
