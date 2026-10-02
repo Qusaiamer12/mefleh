@@ -160,6 +160,20 @@ pre.wa{background:#f8fafc;border:1px solid var(--line);border-radius:12px;paddin
 
 /* ===== الكشف المطبوع ===== */
 .statement{margin:16px 0;border:2px solid #111;padding:10px;background:#fff}
+.waBtn{margin-inline-start:auto;background:#25d366;border-color:#1ebe5a;color:#fff}
+/* نسخة الكشف اللي بتتحول PDF (ورا محتوى الصفحة، مش ظاهرة) */
+.pdfHold{position:absolute;left:0;top:0;width:760px;z-index:-5;pointer-events:none;opacity:1}
+.pdfMode{width:auto;max-width:100%;box-sizing:border-box;background:#fff;color:#111;padding:6px}
+.pdfMode .card{box-shadow:none !important;border:0 !important;margin:0 !important;padding:0 !important;background:#fff !important}
+.pdfMode .watermark:before{display:none}
+.pdfMode .tw{overflow:visible !important;border:0;box-shadow:none}
+.pdfMode table{width:100% !important;min-width:0 !important;border-collapse:collapse;font-size:12px;table-layout:auto}
+.pdfMode *{letter-spacing:normal !important}
+.pdfMode table td,.pdfMode table th{padding:3px 5px}
+.pdfMode tr{page-break-inside:avoid}
+.pdfMode .reportLogo{width:90px}
+.revTag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;
+  background:#fff4c2;color:#7a5a00;border:1px solid #f0c000;white-space:nowrap}
 .statementHeader{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px}
 .statementHeader h2{margin:0}
 .reportLogo{width:120px;object-fit:contain;border-radius:10px;border:2px solid var(--gold)}
@@ -878,7 +892,7 @@ const DAYS={'السبت':'السبت','الاحد':'الأحد','الأحد':'ا
 const OUT_W=['اخراج','خروج','خارج','طلع','طلعنا','طالع','سحب','سحبنا','صادر','تحميل','حملنا',
   'صرف','صرفنا','شحن','شحنا','سلمنا','تسليم','بيع','بعنا','نزلنا عند','رحل','مشحون','طلبية','للزبون'];
 const IN_W =['ادخال','دخول','داخل','وارد','استلمنا','استلام','توريد','تنزيل','نزلنا','وصل','وصلنا',
-  'مرتجع','راجع','رجع','رجعوا','ارجاع','اضافة','اضفنا','جانا','اجانا','دخل','ادخل','تعبئة','انتاج'];
+  'مرتجع','مرتحع','راجع','رجع','رجعوا','ارجاع','اضافة','اضفنا','جانا','اجانا','دخل','ادخل','تعبئة','انتاج'];
 
 /* كلمات الإلغاء: بتشيل السطر اللي قبلها */
 const CANCEL_W=/^(?:الغاء|الغي|تجاهل|احذف|شطب|غلط|خطا|مش صحيح|بدل|صحح|تصحيح|عفوا|اسف|سوري)(?![\u0600-\u06FF])/;
@@ -935,14 +949,14 @@ const SYNONYMS=[
   [/لفت.*اصابع|مخلل\s*لفت/, 'لفت'],
   [/ورق\s*عنب\s*محشي\s*لبن[ةه]|ورق\s*عنب\s*ملفوف\s*لبن[ةه]/, 'ورق عنب محشي لبنة'],
   [/ورق\s*عنب|ورق\s*العنب/, 'دوالي'],
-  [/مقدوس\s*تواصي|تواصي\s*مقدوس|مقدوس\s*ام\s*ابراهيم|مقدوس/, 'مكدوس'],
+  [/مقدوس\s*تواصي|تواصي\s*مقدوس|مقدوس\s*ام\s*ابراهيم|مقدوس|مكدس(?=\s|$)/, 'مكدوس'],
   [/سلطة\s*فلفل|فلفل\s*سلط[ةه]/, 'سلطة فلفل'],
   [/سلطة\s*فاصولي[اء]?|فاصولي[اء]?\s*سلط[ةه]/, 'سلطة فاصولياء'],
   [/توم\b/, 'ثوم'],
   [/مشوي\s*ساد[ةه]/, 'اثينا مشوي'],
-  [/زيت\s*صويا/, 'زيت صفوة'],
+  [/زيت\s*صويا/, 'زيت'],
   [/مشوي\s*تنك|تنك\s*مشوي/, 'تنك مشوي'],
-  [/مشرح\s*المفلح.*/, 'مفلح مشرح'],
+  [/مشرح\s*(?:ال)?مفلح.*/, 'مفلح مشرح'],
   [/اسباني\s*حب\s*المفلح|حب\s*المفلح\s*كرتون|اسباني\s*حب/, 'حب مفلح'],
   [/(?:ال)?كلمتا\s*(?:ال)?يوناني/, 'يوناني'],
   [/كلمتا\s*محمول|كلمتا\s*موبايل|كلمتا/, 'كلماتا'],
@@ -955,7 +969,7 @@ const SYNONYMS=[
   [/فلسطيني|فلسطين/, 'فلسطيني'],
   [/كروسدي|كروسيدي|كروسيد/, 'كروسيدي'],
   [/بيكوال/, 'بيكوال'],
-  [/هالابينو\s*بلدي|هلابينو\s*بلدي|هالابينو|هلابينو|هالبينو|ھالبينو/, 'ھالبينو'],
+  [/هالابينو\s*بلدي|هلابينو\s*بلدي|هالابينو|هلابينو|هالبينو|ھالبينو|هلابنيو|هلبينو/, 'ھالبينو'],
   [/فلفل\s*مكسكي\s*(?:محشي\s*)?لبن[ةه]|فلفل\s*مكسيكي\s*(?:محشي\s*)?لبن[ةه]/, 'فلفل مكسيكي محشي لبنة'],
   [/مشوي\s*محشي\s*لبن[ةه]|مشوي.*لبن[ةه]/, 'مشوي محشي لبنة'],
   [/شيري\s*محشي\s*لبن[ةه]|شيري.*لبن[ةه]/, 'شيري محشي لبنة'],
@@ -963,7 +977,15 @@ const SYNONYMS=[
   [/اخضر\s*محشي\s*لبن[ةه]|اخضر.*لبن[ةه]/, 'اخضر محشي لبنة'],
   [/نبالي|نبالى/, 'نبالي'],
   [/مكدوس.*جوز|مكدوس.*الجوز/, 'مكدوس'],
-  [/مخلي\s*اخضر|اخضر\s*مخلي|مخلي\s*أخضر/, 'مخلي اخضر']
+  [/مخلي\s*اخضر|اخضر\s*مخلي|مخلي\s*أخضر/, 'مخلي اخضر'],
+  /* من تسجيلات جروبات الواتس (كشف اسلام أيلول 2026) */
+  [/(?:^|\s)در[ةه](?:\s*عراقي[ةه]?)?(?=\s|$)|ذر[ةه]\s*عراقي[ةه]?/, 'ذرة'],
+  [/خيار\s*(?:بيبي\s*)?قناني|خيار\s*بيبي|خيار\s*دمدم|بيبي\s*دمدم/, 'بيبي'],
+  [/خيار\s*اول|خياراول/, 'اول'],
+  [/خيار\s*برجر/, 'برجر'],
+  [/شرا[يئ]ح\s*اخضر|اخضر\s*شرا[يئ]ح|مشرخ\s*اخضر/, 'مصري مشرح سادة'],
+  [/جاط\s*مربع/, 'جاط'],
+  [/جرجير\s*(?:علوش|اكرام|ikram)/i, 'جرجير']
 ];
 /* كلمات وصفية بتنشال من الاسم قبل المطابقة */
 const DROP_WORDS=/(?:^|\s)(?:سوبر|اكسترا|ممتاز|درجه\s*اولى|فاخر|خاص|عادي|نوع\s*ا|طازج\s*|طبيعي|جامده|جامدة|وسط|premium|super|extra)(?=\s|$)/g;
@@ -1034,7 +1056,8 @@ const DEFAULT_SIZE={
   'شيري محشي لبنة':5,'محشي لبنة':5,'مشوي محشي لبنة':5,'اسود محشي لبنة':5,
   'ورق عنب محشي لبنة':5,'فلفل مكسيكي محشي لبنة':5,'اخضر محشي لبنة':5,
   'مصري مشرح سادة':10,'دوالي':8,'ذرة':10,'مفلح مشرح':9.36,
-  'مشرح اخضر':10,'مخلي اخضر':10,'مشكل':10
+  'مشرح اخضر':10,'مخلي اخضر':10,'مشكل':10,
+  'مكسيكي':7,'فلفل مكسيكي':7,'روزمري':6,'جاط':4,'جاط فارغ':4
 };
 function defaultSizeFor(baseName){
   const k=key(baseName);
@@ -2771,24 +2794,35 @@ async function saveDraft(){
         <span class="mut">${bad.slice(0,5).map(b=>esc(b.item||'(بدون اسم)')).join('، ')}${bad.length>5?' …':''}</span>`});
     if(!ok) return;
   }
-  const total=draft.rows.reduce((a,r)=>a+(parseFloat(r.total)||0),0);
-  const editing=!!draft.id;
-  const inv={ id:draft.id||uid(),
-    no:draft.no||nextNo(draft.customer,draft.voucher),
-    customer:draft.customer, voucher:draft.voucher, date:draft.date,
-    rows:JSON.parse(JSON.stringify(draft.rows)).map(r=>({...r,day:r.day||dayNameOf(draft.date)})),
-    total:+total.toFixed(4),
-    savedAt:new Date().toISOString() };
-  if(editing){ const ix=invoices.findIndex(x=>x.id===draft.id);
-    if(ix>=0) invoices[ix]=inv; else invoices.unshift(inv);
-    logAction('تعديل',inv,`${inv.rows.length} بند — ${fx(inv.total)}`); }
-  else { invoices.unshift(inv); logAction('إنشاء',inv,`${inv.rows.length} بند — ${fx(inv.total)}`); }
+  const inv=commitInvoice(draft);
   if(saveInv()){
     toast(`✅ تم حفظ السند ${inv.no}`);
     draft={id:'',no:'',customer:inv.customer,voucher:inv.voucher,date:todayStr(),day:'',rows:[]};
     lastSkipped=[]; vEntry();
   }
 }
+/* بناء السند وإضافته للقائمة (مشترك بين الحفظ العادي والاستيراد).
+   التعديل بيحافظ على مصدر السند المستورد، وبيعتبره «تمت مراجعته». */
+function commitInvoice(d,extra){
+  const total=d.rows.reduce((a,r)=>a+(parseFloat(r.total)||0),0);
+  const editing=!!d.id;
+  const ix=editing?invoices.findIndex(x=>x.id===d.id):-1;
+  const old=ix>=0?invoices[ix]:null;
+  const inv=Object.assign({ id:d.id||uid(),
+    no:d.no||nextNo(d.customer,d.voucher),
+    customer:d.customer, voucher:d.voucher, date:d.date,
+    rows:JSON.parse(JSON.stringify(d.rows)).map(r=>({...r,day:r.day||dayNameOf(d.date)})),
+    total:+total.toFixed(4),
+    savedAt:new Date().toISOString() },
+    old&&old.importKey?{src:old.src,importKey:old.importKey,review:false}:{},
+    extra||{});
+  if(editing){
+    if(ix>=0) invoices[ix]=inv; else invoices.unshift(inv);
+    logAction('تعديل',inv,`${inv.rows.length} بند — ${fx(inv.total)}`); }
+  else { invoices.unshift(inv); logAction('إنشاء',inv,`${inv.rows.length} بند — ${fx(inv.total)}`); }
+  return inv;
+}
+
 /* معرّف قصير للجهاز — يمنع تكرار رقم السند لو استخدمت أكثر من جهاز */
 function deviceTag(){
   if(!settings.device){
@@ -2812,7 +2846,7 @@ function nextNo(cust,vou){
 </script>
 <script>
 /* ============ ② السندات المحفوظة ============ */
-let fInv={q:'',cust:'',vou:'',from:'',to:''};
+let fInv={q:'',cust:'',vou:'',from:'',to:'',rev:false};
 let fCons={q:'',from:'',to:''};
 
 function vConsumption(){
@@ -2884,6 +2918,9 @@ function vInvoices(){
       <div><label>من تاريخ</label><input type="date" value="${fInv.from}" onchange="fInv.from=this.value;drawInv()"></div>
       <div><label>إلى تاريخ</label><input type="date" value="${fInv.to}" onchange="fInv.to=this.value;drawInv()"></div>
     </div>
+    ${isAdmin()&&invoices.some(v=>v.review)?`<label class="chkRow" style="margin-top:10px">
+      <input type="checkbox" ${fInv.rev?'checked':''} onchange="fInv.rev=this.checked;drawInv()">
+      <span>🟡 بس السندات المستوردة من واتساب اللي لسه بدها مراجعة (${invoices.filter(v=>v.review).length})</span></label>`:''}
   </div>
   <div id="invBox"></div>`;
   drawInv();
@@ -2895,6 +2932,7 @@ function invFiltered(){
     if(fInv.vou&&v.voucher!==fInv.vou)return false;
     if(fInv.from&&v.date<fInv.from)return false;
     if(fInv.to&&v.date>fInv.to)return false;
+    if(fInv.rev&&!v.review)return false;
     if(!q)return true;
     return key(v.no+' '+v.customer+' '+v.rows.map(r=>r.item).join(' ')).includes(q);
   });
@@ -2916,7 +2954,7 @@ function drawInv(){
     <thead><tr><th>رقم السند</th><th>التاريخ</th><th>الزبون</th><th>النوع</th>
       <th>البنود</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
     <tbody>${L.length?L.map(v=>`<tr>
-      <td><b>${esc(v.no)}</b></td><td>${v.date}</td><td>${esc(v.customer)}</td>
+      <td><b>${esc(v.no)}</b>${v.review&&isAdmin()?' <span class="revTag" title="مستورد من واتساب — بحاجة مراجعة">🟡 واتساب</span>':''}</td><td>${v.date}</td><td>${esc(v.customer)}</td>
       <td class="${v.voucher==='إخراج'?'vOut':'vIn'}">${v.voucher}</td>
       <td>${v.rows.length}</td><td><b>${fx(v.total)}</b></td>
       <td>
@@ -2952,10 +2990,19 @@ function viewInv(id){
     <tr class="tot"><td colspan="7">الإجمالي</td><td>${fx(v.total)}</td></tr>
     </tbody></table></div>
     <p class="hint">💡 اضغط على أي <b>سعر</b> بالجدول عشان تطلب تعديله.</p>
+    ${v.review&&isAdmin()?`<div class="note noprint">🟡 هذا السند مستورد من شات واتساب — راجع البنود والأسعار،
+      وعدّل من «تعديل» إذا في غلط.</div>`:''}
     <div class="row" style="margin-top:12px">
       <button class="btn blue" onclick="window.print()">🖨️ طباعة / PDF</button>
+      ${v.review&&isAdmin()?`<button class="btn" onclick="markReviewed('${v.id}')">✔ تمت المراجعة</button>`:''}
     </div></div>`;
   try{ $('invDetail').scrollIntoView({behavior:'smooth'}); }catch(e){}
+}
+function markReviewed(id){
+  const v=invoices.find(x=>x.id===id); if(!v||!isAdmin()) return;
+  v.review=false; saveInv();
+  logAction('مراجعة',v,'سند مستورد من واتساب — تمت مراجعته');
+  drawInv(); viewInv(id); notify('✔ تمت مراجعة السند '+v.no,'ok');
 }
 function editInv(id){
   const v=invoices.find(x=>x.id===id); if(!v)return;
@@ -3253,10 +3300,11 @@ function drawRep(){
     const o=sub.filter(v=>v.voucher==='إخراج'),i=sub.filter(v=>v.voucher==='إدخال');
     const to=o.reduce((a,v)=>a+v.total,0), ti=i.reduce((a,v)=>a+v.total,0);
     gOut+=to;gIn+=ti;
-    html+=`<div class="card watermark cust">
+    html+=`<div class="card watermark cust" data-cust="${esc(c)}">
       <div class="custHead">
         <h2>كشف ${esc(c)}</h2>
         <div class="custMeta">${fRep.from} ← ${fRep.to} · ${sub.length} سند</div>
+        ${isAdmin()?`<button class="btn sm noprint waBtn" onclick="shareStatement(this.closest('.cust').dataset.cust,this)">📤 واتساب PDF</button>`:''}
       </div>
       <div class="tw"><table class="sheet">
         <tbody>
@@ -3333,6 +3381,96 @@ function drawRep(){
           <b>كشف هذا الأسبوع لسه ما صدر</b>
           <div class="hint" style="margin-top:6px">رح يوصلك إشعار أول ما ينشره المدير.</div>
         </div>`)}`;
+}
+
+/* ===== الكشف PDF ← واتساب =====
+   بيعمل PDF لكشف زبون وحده، وبيفتح شاشة المشاركة بالموبايل (بتختار
+   جروب الزبون). على الكمبيوتر الملف بينزل وبترفقه بإيدك.            */
+const _scripts={};
+function loadScript(src){
+  return _scripts[src]=_scripts[src]||new Promise((res,rej)=>{
+    const el=document.createElement('script'); el.src=src; el.onload=res;
+    el.onerror=()=>{ delete _scripts[src]; rej(new Error('تعذّر تحميل مكتبة الـ PDF — تأكد من الإنترنت')); };
+    document.head.appendChild(el);
+  });
+}
+/* يرسم عنصر لصفحات A4 بدون ما يقص صف جدول بالنص */
+async function elToPdf(el){
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  const SC=2, M=8, PW=210-2*M, PH=297-2*M;             /* مم */
+  const canvas=await window.html2canvas(el,{scale:SC,backgroundColor:'#ffffff',logging:false});
+  const W=el.offsetWidth, H=el.offsetHeight, pageH=W*PH/PW;
+  /* نقاط القطع المسموحة: نهاية كل صف/ترويسة */
+  const top=el.getBoundingClientRect().top;
+  const cuts=[...el.querySelectorAll('tr,.statementHeader,.custHead')]
+    .map(e=>e.getBoundingClientRect().bottom-top).sort((a,b)=>a-b);
+  const starts=[0];
+  for(let y=0; H-y>pageH; ){
+    const lim=y+pageH;
+    const c=cuts.filter(b=>b>y+40&&b<=lim).pop()||lim;
+    starts.push(c); y=c;
+  }
+  const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+  starts.forEach((y0,i)=>{
+    const y1=i+1<starts.length?starts[i+1]:H;
+    const part=document.createElement('canvas');
+    part.width=canvas.width; part.height=Math.max(1,Math.round((y1-y0)*SC));
+    const g=part.getContext('2d');
+    g.fillStyle='#fff'; g.fillRect(0,0,part.width,part.height);
+    g.drawImage(canvas,0,Math.round(y0*SC),canvas.width,part.height,0,0,part.width,part.height);
+    if(i) pdf.addPage();
+    pdf.addImage(part.toDataURL('image/jpeg',0.92),'JPEG',M,M,PW,(y1-y0)*PW/W);
+  });
+  return pdf.output('blob');
+}
+async function shareStatement(c,btn){
+  if(!isAdmin()) return;
+  const card=[...document.querySelectorAll('#repBox .card.cust')].find(el=>el.dataset.cust===c);
+  if(!card) return;
+  const old=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='⏳ بجهّز الـ PDF…'; }
+  const wrap=document.createElement('div');
+  wrap.className='pdfMode'; wrap.dir='rtl';
+  wrap.innerHTML=`<div class="statementHeader"><img class="reportLogo" src="${BADGE}" alt="ALMEFLEH">
+    <div><h2 style="margin:0;color:var(--g)">كشف حركة المستودع — ${esc(c)}</h2>
+    <div class="hint" style="margin:2px 0 0">الفترة ${fRep.from} إلى ${fRep.to}</div></div></div>`;
+  const clone=card.cloneNode(true);
+  clone.querySelectorAll('.noprint,button').forEach(e=>e.remove());
+  wrap.appendChild(clone);
+  /* أعلى الصفحة وورا المحتوى — html2canvas بيرسمه صح هون (خارج الشاشة بيطلع فاضي) */
+  const hold=document.createElement('div'); hold.className='pdfHold';
+  hold.appendChild(wrap); document.body.appendChild(hold);
+  try{
+    const blob=await elToPdf(wrap);
+    const name=`كشف-${c}-${fRep.from}_${fRep.to}.pdf`;
+    const file=new File([blob],name,{type:'application/pdf'});
+    const L=repList().filter(v=>v.customer===c);
+    const o=L.filter(v=>v.voucher==='إخراج').reduce((a,v)=>a+v.total,0);
+    const i=L.filter(v=>v.voucher==='إدخال').reduce((a,v)=>a+v.total,0);
+    const text=`كشف ${c} — ${fRep.from} ← ${fRep.to}\nالإخراج ${fx(o)} · الإدخال ${fx(i)} · الصافي ${fx(o-i)}`;
+    const share=()=>navigator.share({files:[file],title:name,text});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await share(); }
+      catch(e){
+        if(e&&e.name==='AbortError') return;
+        /* المتصفح بدو ضغطة جديدة بعد التجهيز */
+        if(await ask({title:'📤 الـ PDF جاهز',body:`كشف <b>${esc(c)}</b> جاهز للإرسال.`,ok:'📤 شارك على واتساب'})) await share();
+      }
+    }else{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob); a.download=name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+      notify('⬇️ نزل الـ PDF — أرفقه بجروب الزبون على واتساب','ok',6000);
+    }
+    logAction('إرسال كشف',null,`${c} — ${fRep.from} ← ${fRep.to}`);
+  }catch(e){
+    if(!(e&&e.name==='AbortError')) say('تعذّر تجهيز الـ PDF',esc(String(e&&e.message||e))+'<br><br>جرّب «🖨️ طباعة / PDF» كبديل.');
+  }finally{
+    hold.remove();
+    if(btn){ btn.disabled=false; btn.textContent=old; }
+  }
 }
 
 /* تصدير Excel — ملف HTML بامتداد xls يفتحه إكسل مباشرة */
@@ -3522,6 +3660,16 @@ function vSettings(){
       <label class="btn blue" style="cursor:pointer;display:inline-block;width:auto">
         ⬆️ استرجاع نسخة<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>📥 استيراد سندات جاهزة (من شات واتساب)</h2>
+    <p class="hint">ملف <b>import.json</b> اللي بيجهزه قارئ الشات. الاستيراد <b>بيضيف سندات جديدة بس</b> —
+      ما بيمسح ولا بيعدّل أي سند أو صنف أو سعر موجود. الأسعار بتنحسب من قائمتك الحالية
+      (إلا إذا الرسالة نفسها فيها سعر)، والسندات بتنعلّم 🟡 لحد ما تراجعها.</p>
+    <label class="btn" style="cursor:pointer;display:inline-block;width:auto">
+      📥 اختار ملف السندات<input type="file" accept=".json,application/json" style="display:none"
+        onchange="importVouchers(this.files[0]);this.value=''"></label>
   </div>
 
   <div class="card">
@@ -3858,6 +4006,99 @@ if(!settings.ai) settings.ai={provider:'groq',keys:{},models:{}};
     }catch(e){ say('ملف غير صالح','ما قدرت أقرأ الملف. تأكد إنه ملف نسخة احتياطية من هذا النظام.'); } };
   r.readAsText(f);
 }
+/* ===== استيراد سندات جاهزة (ملف mefleh-import من tools/wa-reader.js) =====
+   إضافة فقط: ما في حذف ولا استبدال لأي سند/صنف/سعر موجود.        */
+function importRow(r,voucher,date){
+  const notes=[];
+  const qty=(r.qty===null||r.qty===undefined)?'':r.qty;
+  const w=(r.weight===null||r.weight===undefined||r.weight==='')?'':r.weight;
+  const line=[r.item||'',qty,w===''?'':w+(r.unit||'ك')].filter(x=>x!=='').join(' ');
+  let row=r.item?parseLine(line,{day:'',voucher,date,cancelLast:false}):null;
+  if(!row||!row.item){
+    row={id:uid(),day:'',item:r.item||'',base:r.item||'',qty,weight:w,unit:r.unit||'',
+         price:'',total:'',notes:'',original:''};
+    notes.push('⚠️ ما قدرت أطابق الصنف — عبّيه يدويًا');
+  }
+  if(row.qty===''&&qty!=='') row.qty=qty;
+  /* وزن سائب («جزر ٢٦كيلو») بلا عبوة بهالحجم: السعر بالكيلو من نفس الصنف */
+  if(r.bulk && row.price==='' && +w>0){
+    const bk=itemSize(row.base||row.item).base;
+    const fam=items.filter(it=>{ const s=itemSize(it); return s.base===bk && +s.size>0 && /ك|كيلو|كغ/.test(s.unit||'ك'); });
+    const ds=defaultSizeFor(row.base||row.item);
+    const ref=fam.find(it=>+itemSize(it).size===ds)||fam[0];
+    const pr=ref?priceOf(ref,voucher):null;
+    if(pr&&pr.price!==''){
+      row.price=+(pr.price/itemSize(ref).size*(+w)).toFixed(3);
+      row.weight=+w; row.qty=1;
+      notes.push(`سعر محسوب بالكيلو من ${labelOf(ref)}`);
+    }
+  }
+  if(r.priceFromMsg && r.price!==null && r.price!==undefined && !isNaN(+r.price)){
+    row.price=+r.price; notes.push('السعر من الرسالة');
+  }
+  calcTotal(row);
+  row.notes=[row.notes,r.notes?'📱 '+r.notes:'',...notes].filter(Boolean).join(' • ');
+  row.original=r.original||row.original||'';
+  row.day=dayNameOf(date);
+  return row;
+}
+let IMPORT_CLASH_OK=false;   /* خيار «استوردهم برضه» بنافذة التأكيد */
+function importVouchers(f){
+  if(!f) return;
+  IMPORT_CLASH_OK=false;
+  if(!isAdmin()){ notify('الاستيراد للمدير فقط','bad'); return; }
+  const rd=new FileReader();
+  rd.onload=async()=>{
+    let o;
+    try{ o=JSON.parse(rd.result); }catch(e){ o=null; }
+    if(!o||o.kind!=='mefleh-import'||!Array.isArray(o.vouchers)){
+      say('ملف غير صالح','هذا مش ملف سندات جاهزة (import.json) من قارئ الشات.'); return; }
+    if(!custNames().includes(o.customer)){
+      say('زبون غير معروف',`الزبون «${esc(o.customer)}» مش موجود بقائمة الزباين. أضفه من الإعدادات أو صحّح الملف.`); return; }
+    const okV=o.vouchers.filter(v=>/^\d{4}-\d{2}-\d{2}$/.test(v.date||'')
+      &&(v.voucher==='إدخال'||v.voucher==='إخراج')&&Array.isArray(v.rows)&&v.rows.length);
+    const bad=o.vouchers.length-okV.length;
+    const keys=new Set(invoices.map(v=>v.importKey).filter(Boolean));
+    const seen=okV.filter(v=>v.key&&keys.has(v.key));
+    const fresh=okV.filter(v=>!(v.key&&keys.has(v.key)));
+    const clash=fresh.filter(v=>invoices.some(x=>x.customer===o.customer&&x.date===v.date&&x.voucher===v.voucher));
+    if(!fresh.length){
+      say('ما في جديد',`كل سندات الملف (${okV.length}) مستوردة من قبل — ما انضاف شي.`); return; }
+    const built=fresh.map(v=>({v,rows:v.rows.map(r=>importRow(r,v.voucher,v.date))}));
+    const tot=(vou)=>built.filter(b=>b.v.voucher===vou)
+      .reduce((a,b)=>a+b.rows.reduce((s,r)=>s+(parseFloat(r.total)||0),0),0);
+    const nWarn=built.reduce((a,b)=>a+b.rows.filter(r=>r.price===''||/⚠️/.test(r.notes)).length,0);
+    const nRows=built.reduce((a,b)=>a+b.rows.length,0);
+    const res=await ask({title:'📥 استيراد سندات — '+esc(o.customer),ok:'استورد',
+      body:`الفترة <b>${esc(o.from||'')} ← ${esc(o.to||'')}</b><br><br>
+        • سندات جديدة: <b>${fresh.length}</b> (${nRows} بند)<br>
+        • إجمالي الإخراج: <b>${fx(tot('إخراج'))}</b> · الإدخال: <b>${fx(tot('إدخال'))}</b><br>
+        • بنود بحاجة انتباه (سعر ناقص/صنف مش واضح): <b>${nWarn}</b><br>
+        ${seen.length?`• مستوردة من قبل وبتنتخطى: <b>${seen.length}</b><br>`:''}
+        ${bad?`• سندات ناقصة بالملف وبتنتخطى: <b>${bad}</b><br>`:''}
+        ${clash.length?`<br><div class="note">⚠️ في <b>${clash.length}</b> يوم إله سند محفوظ من قبل لنفس الزبون والنوع:
+          <span class="mut">${clash.slice(0,6).map(v=>v.date+' '+v.voucher).join('، ')}${clash.length>6?' …':''}</span>
+          <label class="chkRow" style="margin-top:6px"><input type="checkbox" onchange="IMPORT_CLASH_OK=this.checked">
+            <span>استوردهم برضه (غير هيك بنتخطاهم)</span></label></div>`:''}
+        <br><span class="mut">ما رح يتغيّر أي سند أو سعر موجود. السندات الجديدة بتنعلّم 🟡 للمراجعة.</span>`});
+    const incl=IMPORT_CLASH_OK;
+    IMPORT_CLASH_OK=false;
+    if(!res) return;
+    let n=0;
+    built.forEach(b=>{
+      if(!incl && clash.includes(b.v)) return;
+      commitInvoice({customer:o.customer,voucher:b.v.voucher,date:b.v.date,rows:b.rows},
+        {src:'whatsapp',importKey:b.v.key||('wa-'+uid()),review:true});
+      n++;
+    });
+    if(!n){ notify('ما انضاف ولا سند','warn'); return; }
+    saveInv();
+    logAction('استيراد واتساب',null,`${o.customer} — ${n} سند (${o.from||''} ← ${o.to||''})`);
+    notify(`📥 انضاف ${n} سند لـ ${o.customer} — راجعهم من «السندات المحفوظة» 🟡`,'ok',7000);
+  };
+  rd.readAsText(f);
+}
+
 async function wipeInv(){
   if(!invoices.length){ notify('ما في سندات أصلًا','warn'); return; }
   const ok=await ask({title:'مسح كل السندات',danger:true,ok:'امسح الكل',
