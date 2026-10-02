@@ -664,7 +664,7 @@ const key = s => norm(s).toLowerCase().replace(/[^\w\u0600-\u06FF]/g,'');
 const LS={inv:'wh_invoices_v1',items:'wh_items_v1',set:'wh_settings_v1',
           log:'wh_log_v1',trash:'wh_trash_v1',
           reqs:'wh_reqs_v1',msgs:'wh_msgs_v1',notes:'wh_notes_v1',
-          led:'wh_ledger_v1',lcl:'wh_lclients_v1'};
+          led:'wh_ledger_v1',lcl:'wh_lclients_v1',dead:'wh_dead_v1'};
 
 const IDB={db:null,ok:false};
 function idbOpen(){
@@ -740,6 +740,7 @@ let msgs     = load(LS.msgs,[]);    /* الرسائل بين الأعضاء */
 let notes    = load(LS.notes,[]);   /* الإشعارات */
 let ledger   = load(LS.led,[]);     /* كشوفات حساب الزبائن الخاصين (له/عليه) */
 let lclients = load(LS.lcl,[]);     /* دفتر زبائن كل مستخدم */
+let dead     = load(LS.dead,[]);    /* سجل الحذف المشترك بين الأجهزة {id,k,rid,at} */
 
 /* الحسابات المعتمدة — تُزرع أول تشغيل وتُدمج مع أي إعدادات قديمة محفوظة.
    ما في كلمات سر صريحة بالكود: بس تجزئة PBKDF2، والحساب الجديد مطالب يغيّرها. */
@@ -859,8 +860,9 @@ function toTrash(kind,label,payload){
 function restoreTrash(tid){
   const i=trash.findIndex(x=>x.id===tid); if(i<0) return false;
   const e=trash[i];
+  const now=new Date().toISOString();
   if(e.kind==='invoice'){
-    if(!invoices.some(v=>v.id===e.payload.id)) invoices.unshift(e.payload);
+    if(!invoices.some(v=>v.id===e.payload.id)) invoices.unshift({...e.payload,savedAt:now});
     invoices.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));
     saveInv();
   } else if(e.kind==='item'){
@@ -870,11 +872,11 @@ function restoreTrash(tid){
     if(!settings.customers.some(c=>c.name===e.payload.name)) settings.customers.push(e.payload);
     saveSet();
   } else if(e.kind==='lclient'){
-    if(e.payload.rec && !lclients.some(c=>c.id===e.payload.rec.id)) lclients.push(e.payload.rec);
-    (e.payload.rows||[]).forEach(r=>{ if(!ledger.some(x=>x.id===r.id)) ledger.push(r); });
+    if(e.payload.rec && !lclients.some(c=>c.id===e.payload.rec.id)) lclients.push({...e.payload.rec,savedAt:now});
+    (e.payload.rows||[]).forEach(r=>{ if(!ledger.some(x=>x.id===r.id)) ledger.push({...r,savedAt:now}); });
     saveLClients(); saveLedger();
   } else if(e.kind==='bulk-invoices'){
-    e.payload.forEach(v=>{ if(!invoices.some(x=>x.id===v.id)) invoices.push(v); });
+    e.payload.forEach(v=>{ if(!invoices.some(x=>x.id===v.id)) invoices.push({...v,savedAt:now}); });
     invoices.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));
     saveInv();
   }
@@ -4357,6 +4359,7 @@ const BIND = [
   [LS.notes,()=>notes,     v=>{notes=v}],
   [LS.led,  ()=>ledger,    v=>{ledger=v}],
   [LS.lcl,  ()=>lclients,  v=>{lclients=v}],
+  [LS.dead, ()=>dead,      v=>{dead=v}],
 ];
 const bBind  = k => BIND.find(b=>b[0]===k);
 const getVar = k => { const b=bBind(k); return b?b[1]():undefined; };
@@ -4365,13 +4368,43 @@ const fbTimeout = ms => new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeo
 
 /* مجموعات سجلّية قابلة للدمج (عناصرها فيها id من uid()) —
    الإضافات المتزامنة من أكثر من جهاز بتتحفظ، مش آخر كاتب يكسب */
-const MERGEABLE = new Set([LS.inv,LS.led,LS.msgs,LS.notes,LS.reqs,LS.trash,LS.lcl]);
+const MERGEABLE = new Set([LS.inv,LS.led,LS.msgs,LS.notes,LS.reqs,LS.trash,LS.lcl,LS.dead]);
 const idsOf = arr => new Set((Array.isArray(arr)?arr:[]).map(x=>x&&x.id).filter(Boolean));
 const tombs = k => (FB.tombs[k]=FB.tombs[k]||new Set());
 
+/* سجل الحذف المشترك: الحذف من أي جهاز بيوصل لكل الأجهزة، وجهاز فيه نسخة
+   قديمة ما بيرجّع السجل. السجل بيرجع بس إذا انحفظ بعد حذفه (استرجاع/تعديل). */
+const DEAD_DAYS=180;
+function deadMap(k){
+  const m=new Map();
+  (Array.isArray(dead)?dead:[]).forEach(d=>{ if(d&&d.k===k&&d.rid&&!(m.get(d.rid)>=d.at)) m.set(d.rid,String(d.at||'')); });
+  return m;
+}
+function dropDead(k,arr){
+  if(k===LS.dead||!Array.isArray(arr)) return arr;
+  const m=deadMap(k); if(!m.size) return arr;
+  return arr.filter(e=>{ const at=e&&e.id&&m.get(e.id); return !at || (e.savedAt && String(e.savedAt)>at); });
+}
+/* بعد ما يوصل حذف من جهاز ثاني: نشيل المحذوف من كل المجموعات محليًا،
+   ونرفع المجموعة اللي تغيّرت عشان تنظف السحابة كمان */
+function fbApplyDead(push){
+  let any=false;
+  BIND.forEach(([k])=>{
+    if(!MERGEABLE.has(k)||k===LS.dead) return;
+    const cur=getVar(k); if(!Array.isArray(cur)) return;
+    const f=dropDead(k,cur);
+    if(f.length===cur.length) return;
+    setVar(k,f); try{ fbLocalSave(k,f); }catch(e){}
+    if(FB.syncIds[k]) FB.syncIds[k]=idsOf(f);
+    any=true;
+    if(push) fbPush(k);
+  });
+  return any;
+}
+
 /* دمج محلي + سحابي: وحدة بالـ id، المحلي بيكسب عند تعارض نفس الـ id،
    والعناصر اللي بالشواهد المحلية (محذوفة عن قصد) ما بترجع          */
-function fbMerge(local,remote,tom){
+function fbMerge(local,remote,tom,k){
   const map=new Map();
   (Array.isArray(remote)?remote:[]).forEach(e=>{
     const id=e&&e.id;
@@ -4381,9 +4414,18 @@ function fbMerge(local,remote,tom){
   (Array.isArray(local)?local:[]).forEach(e=>{
     const id=e&&e.id;
     if(id && tom.has(id)) return;
-    if(id) map.set(id,e);                        /* المحلي أحدث نية → بيكسب */
+    /* نفس السجل على الجهتين: الأحدث حفظًا بيكسب (تعديل من جهاز ثاني ما بيرجع
+       لورا). بلا savedAt أو بالتساوي: المحلي بيكسب زي قبل */
+    const r=id&&map.get(id);
+    if(r && r.savedAt && e && e.savedAt && String(r.savedAt)>String(e.savedAt)) return;
+    if(id) map.set(id,e);
   });
   let out=[...map.values()];
+  if(k===LS.dead){                               /* سجل الحذف: منشيل القديم كثير */
+    const lim=new Date(Date.now()-DEAD_DAYS*864e5).toISOString();
+    return out.filter(d=>String(d.at||'')>=lim);
+  }
+  if(k) out=dropDead(k,out);
   /* ترتيب لطيف شكليًا للعرض */
   if(out.length && out[0] && out[0].savedAt!==undefined)
     out=out.slice().sort((a,b)=>String(b.savedAt||'').localeCompare(String(a.savedAt||'')));
@@ -4439,8 +4481,17 @@ function fbPush(k){
      المحلية هسا = حذف مقصود — بنسجّله بشواهد قبل ما يوصل سحابي */
   if(MERGEABLE.has(k) && FB.syncIds[k]){
     const cur=idsOf(getVar(k));
-    FB.syncIds[k].forEach(id=>{ if(!cur.has(id)) tombs(k).add(id); });
+    const gone=[];
+    FB.syncIds[k].forEach(id=>{ if(!cur.has(id)){ tombs(k).add(id); gone.push(id); } });
     cur.forEach(id=>tombs(k).delete(id));        /* رجع ينضاف؟ شيل الشاهد */
+    FB.syncIds[k]=cur;                           /* كل حذف بينسجّل مرة وحدة */
+    /* الحذف بينكتب بسجل الحذف المشترك عشان يوصل لكل الأجهزة */
+    if(gone.length && k!==LS.dead){
+      const at=new Date().toISOString();
+      gone.forEach(rid=>dead.push({id:k+'|'+rid+'|'+at,k,rid,at}));
+      try{ fbLocalSave(LS.dead,dead); }catch(e){}
+      fbPush(LS.dead);
+    }
   }
   if(!FB.ready){ FB.outbox.add(k); return; }
   clearTimeout(FB.timers[k]);
@@ -4482,7 +4533,7 @@ async function fbPushNow(k){
         try{ remote=JSON.parse(parts.join('')); }catch(e){ remote=[]; }
       }
       const local=Array.isArray(raw)?raw:[];
-      const merged=fbMerge(local,remote,tom);
+      const merged=fbMerge(local,remote,tom,k);
       const json=JSON.stringify(merged);
       const n=Math.max(1,Math.ceil(json.length/FB_CHUNK));
       const oldN=(msnap&&msnap.exists&&msnap.data().chunks)||FB.nChunks[k]||0;
@@ -4496,14 +4547,15 @@ async function fbPushNow(k){
     FB.last[k]=json; FB.nChunks[k]=n;
     FB.syncIds[k]=idsOf(merged);
     sentTombs.forEach(id=>tom.delete(id));       /* اللي انضاف بعد الإرسال بيضل للدفعة الجاية */
-    if(merged.length!==local.length){
+    if(merged.length!==local.length || json!==JSON.stringify(local)){
       /* السحابة كان فيها عناصر جديدة علينا — مع الحفاظ على أي إضافة محلية صارت أثناء الإرسال */
-      const fin=fbMerge(getVar(k),merged,tom);
+      const fin=fbMerge(getVar(k),merged,tom,k);
       setVar(k,fin);
       try{ fbLocalSave(k,fin); }catch(e){}
       fbRefreshUI();
       const diff=merged.length-local.length;
       if(diff>0) notify(`☁️ انضاف ${diff} سجل من جهاز ثاني`,'ok',3500);
+      if(k===LS.dead) fbApplyDead(true);
     }
     fbBadge('☁️ متصل','on','المزامنة السحابية شغالة');
     return;
@@ -4541,7 +4593,7 @@ function fbApply(k,json){
   if(MERGEABLE.has(k) && Array.isArray(v)){
     /* دمج مع المحلي — ما بيضيع ولا سجل من الطرفين، والمحذوف محليًا ما بيرجع */
     const before=(Array.isArray(getVar(k))?getVar(k):[]).length;
-    v=fbMerge(getVar(k),v,tombs(k));
+    v=fbMerge(getVar(k),v,tombs(k),k);
     FB.syncIds[k]=idsOf(v);
     if(v.length>before) notify(`☁️ وصلك ${v.length-before} سجل جديد من جهاز ثاني`,'ok',3500);
   }else if(MERGEABLE.has(k)){
@@ -4549,6 +4601,7 @@ function fbApply(k,json){
   }
   setVar(k,v);
   try{ fbLocalSave(k,v); }catch(e){}     /* محلي فقط — بلا دفع رجعي */
+  if(k===LS.dead) fbApplyDead(true);     /* حذف من جهاز ثاني: نشيله هون كمان */
   return true;
 }
 
