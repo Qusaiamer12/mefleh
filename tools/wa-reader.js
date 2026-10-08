@@ -141,10 +141,21 @@ const stripMedia = t => t.replace(/<attached:[^>]+>/gi, ' ').replace(MEDIA_RE, '
 const PRICE_ONLY = /^[\d.\s]*(?:و\s*نص|و\s*ربع|ونص|وربع)?[\d.\s]*(?:دينار)?$/;
 
 /* ---------- تجهيز سطر قبل parseLine ---------- */
-const CONTAINER = /(?:^|\s)(?:سطل|سظل|سطول|كرتون[ةه]?|كراتين|جاط|جاطات|(?<!خيار\s*(?:بيبي\s*)?)(?:قناني|قنين[ةه])|(?<!مشوي\s*)تنك[ةه]?|مرتبان(?!\s*صيني))(?=\s|\d|$)/g;
+const CONTAINER = /(?:^|\s)(?:سطل|سظل|سطول|كرتون[ةه]?|كراتين|جاط|جاطات|(?<!خيار\s*(?:بيبي\s*)?)(?:قناني|قنين[ةه])|(?<!مشوي\s*)تنك[ةه]?(?!\s*مشوي)|مرتبان(?!\s*صيني))(?=\s|\d|$)/g;
 const HAS_CONTAINER = /(?:^|\s)(?:سطل|سظل|سطول|جاط|جاطات)(?=\s|\d|$)/;
 const EXTRA = /(?:^|\s)(?:ikram|اكرام|كبير|صغير|عين[ةه]|ذمم|مستعمل|تجاري|عرض|بدل|مع\s+كياس|\+\s*كيس|بدون\s+[فق]اتور[ةه])(?=\s|$)|بيد\s+\S+.*$|مسجلهم.*$|من\s+الوحدات.*$/gi;
 const UNIT_TOK = 'كيلو|كغم|كغ|كجم|لتر|غرام|غم|غ|ك';
+/* تسميات تعلمتها من كشوفاتك المراجعة (نص الشات وتفريغ الصور) */
+function nameRules(s, photo) {
+  s = s.replace(/محشي\s+شط[ةه]/g, 'محشي جزر')                    /* محشي شطة = محشي جزر */
+       .replace(/^محشي(?=\s+\d)/, 'محشي جزر')                     /* «محشي ١ ١٠ك» */
+       .replace(/مشرح\s+اسود/g, 'اسود مشرح')
+       .replace(/علب[ةه]\s+اثينا\s+حب(?:\s+علب[ةه])?/g, 'حب اثينا 2.5ك')
+       .replace(/كل[اى]?م?اتا\s+يوناني|كلمتا\s+يوناني/g, 'يوناني');
+  /* «سلطة فليفلة» بالرسايل = سلطة حلوة (بالفواتير اسمها بيضل زي ما هو) */
+  s = s.replace(photo ? /سلط[ةه]\s+حلو[ةه](?:\s+فلفل)?/g : /سلط[ةه]\s+(?:حلو[ةه](?:\s+فلفل)?|فليفل[ةه])/g, 'سلطة حلوة');
+  return s;
+}
 function prepLine(line) {
   let s = line.trim();
   let price = null, priceNote = '', bonus = false;
@@ -155,6 +166,7 @@ function prepLine(line) {
        .replace(/([؀-ۿ\d])\.(?=\s|$)/g, '$1').replace(/(?:^|\s)(?:بل\s*مي|بالمي|بالمية)(?=\s|$)/g, ' ');
   /* «مشرح المفلح كرتون ١ ١٠ك» = كرتونة مفلح مشرح 9.36ك */
   s = s.replace(/(?:^|\s)(?:مشرح\s+المفلح|مفلح\s+مشرح)(.*?)(^|\s|\d)10(?:ك|كيلو)(?=\s|$)/, (m, mid, b) => ` مفلح مشرح${mid}${b}9.36ك`);
+  s = nameRules(s).replace(/(\d+)\s*(?:كراتين|كرتونات)(?=\s|$)/g, ' $1 ');   /* «5كراتين» = العدد */
   /* «جاطات ٤١ فارغ» = جاط فارغ 41 */
   s = s.replace(/(?:^|\s)(سطل|سطول|جاط|جاطات)\s+(\d+)\s+فارغ(?=\s|$)/, (m, c, n) => ` ${/^سط/.test(c) ? 'سطل' : 'جاط'} فارغ ${n}`);
   /* «بونص» = بضاعة مجانية — منسجلها مع ملاحظة */
@@ -173,7 +185,8 @@ function prepLine(line) {
   /* «9360ك» = 9.360ك ، «17200ك» = 17.2ك (فاصلة الآلاف ضايعة) */
   s = s.replace(/(\d{4,5})(ك|كيلو)(?![؀-ۿ])/g, (m, n) => (+n / 1000) + 'ك');
   /* سعر صريح: «١٩دينار» */
-  s = s.replace(/(\d+(?:\.\d+)?)\s*(?:دينار|دنانير|د\.ا)(?=\s|$)/, (m, n) => { price = +n; priceNote = m.trim(); return ' '; });
+  s = s.replace(/(\d+(?:\.\d+)?)\s*(?:دينار|دنانير|د\.ا)(?:\s*و\s*(ربع|نص|نصف))?(?=\s|$)/, (m, n, f) => {
+    price = +n + (f === 'ربع' ? 0.25 : f ? 0.5 : 0); priceNote = m.trim(); return ' '; });
   /* سعر بعد الحجم: «… ١٠ك  ١٦ونص» */
   if (price === null) {
     s = s.replace(new RegExp('(\\d+(?:\\.\\d+)?(?:' + UNIT_TOK + ')\\S*\\s+.*?)(\\d+(?:\\.\\d+)?)\\s*و\\s*نص\\s*$'), (m, pre, n) => {
@@ -387,7 +400,9 @@ function mergePhotos(app, vouchers, images, text) {
     body = body.replace(/\s!(.+)$/, (m, t) => { note = t.trim(); return ''; });
     body = body.replace(/\s@(\d+(?:\.\d+)?)\s*$/, (m, n) => { price = +n; return ''; });
     const ctx = { day: '', voucher: cur.vou, date: cur.date, cancelLast: false };
-    const r = app.call('parseLine', body, ctx);
+    /* نفس قواعد التسمية تبع النص (محشي شطة → محشي جزر، كلمتا يوناني → يوناني …) */
+    const pl = nameRules(body, true);
+    const r = app.call('parseLine', pl, ctx);
     if (!r) { log.push(`⚠️ ${cur.ref}: «${ln}» ما انقرى`); continue; }
     if (price !== null) { r.price = price; r.priceFromMsg = true;
       r.notes = (r.notes ? r.notes + ' • ' : '') + 'السعر من الرسالة/الوصل'; }
@@ -398,6 +413,15 @@ function mergePhotos(app, vouchers, images, text) {
     r.ord = cur.img && cur.img.ord !== undefined ? cur.img.ord * 1000 + 500 + (++cur.n) : Infinity;
     const k = cur.date + '|' + cur.vou;
     if (!byKey.has(k)) { const v = { date: cur.date, voucher: cur.vou, rows: [] }; byKey.set(k, v); vouchers.push(v); }
+    /* بنود بنفس الفاتورة بتطلع نفس الصنف والحجم (محشي شطة + محشي جزر) بتنجمع بسطر واحد */
+    const same = byKey.get(k).rows.find(x => x.msgHead === r.msgHead && x.item === r.item
+      && String(x.weight) === String(r.weight) && String(x.unit || '') === String(r.unit || '') && !x.priceFromMsg && !r.priceFromMsg);
+    if (same && +same.qty > 0 && +r.qty > 0) {
+      same.qty = +same.qty + +r.qty;
+      if (r.notes) same.notes = (same.notes ? same.notes + ' • ' : '') + r.notes;
+      same.original += ' + ' + r.original;
+      continue;
+    }
     byKey.get(k).rows.push(r);
   }
   vouchers.sort((a, b) => (a.date + a.voucher).localeCompare(b.date + b.voucher));
