@@ -156,8 +156,18 @@ function nameRules(s, photo) {
   s = s.replace(photo ? /سلط[ةه]\s+حلو[ةه](?:\s+فلفل)?/g : /سلط[ةه]\s+(?:حلو[ةه](?:\s+فلفل)?|فليفل[ةه])/g, 'سلطة حلوة');
   return s;
 }
+/* قواعد خاصة بكل زبون — من كشوفاته اللي راجعها */
+const CUSTOMER_RULES = {
+  'عمار': [
+    /* «زيتون مشوي مصري ٨ك» و«مشوي مصري سطل ١٠ ١٠ك» = اثينا مشوي 8ك */
+    [/(\d+)\s*(?:زيتون|زتون)\s*مشوي\s+مصري\s+(?:8|10)\s*ك/g, '$1 اثينا مشوي 8ك'],
+    [/(?:(?:زيتون|زتون)\s*)?مشوي\s+مصري(?:\s+سطل)?\s+(\d+)\s+(?:8|10)\s*ك/g, 'اثينا مشوي $1 8ك'],
+  ],
+};
+let CUR_CUSTOMER = '';
 function prepLine(line) {
   let s = line.trim();
+  for (const [re, to] of CUSTOMER_RULES[CUR_CUSTOMER] || []) s = s.replace(re, to);
   let price = null, priceNote = '', bonus = false;
   s = s.replace(/^\[Forwarded\]\s*/i, '').replace(/^[+＋]\s*/, '');
   /* أخطاء كتابة متكررة: «مشرخ» «مع حزر» «مشرح الفلح» «مكسكي» ، ونقطة بعد كلمة أو رقم */
@@ -238,6 +248,7 @@ function rescue(app, row, ctx, header) {
 
 /* ---------- الشات → سندات (تاريخ الرسالة + الاتجاه) ---------- */
 function chatToVouchers(app, msgs, opt) {
+  CUR_CUSTOMER = opt.customer || '';
   const groups = new Map();
   const log = { skipped: [], removed: [], merged: [], images: [] };
   const grp = (d, v) => {
@@ -344,6 +355,11 @@ function chatToVouchers(app, msgs, opt) {
           const r2 = app.call('parseLine', `${r.base || r.item} ${packs.packs} ${ds}ك`, { day: '', voucher: ctx.voucher, date: m.date, cancelLast: false });
           if (!unknown(r2)) { r = r2; r.notes = (r.notes ? r.notes + ' • ' : '') + `${packs.packs} × ${ds}ك من الوزن الكلي`; }
         }
+        /* لبنة بالكيلو: الكيلوهات هي العدد والوزن 1 (زي ما بتسجلها) */
+        if ((r.qty === '' || r.qty === undefined) && /^لبن[ةه]$/.test(String(r.base || r.item).trim()) && +r.weight > 20) {
+          r.qty = +r.weight; r.weight = 1; r.unit = 'ك'; r.bulk = false;
+          r.notes = (r.notes ? r.notes + ' • ' : '') + `لبنة بالكيلو — ${r.qty} كيلو × سعر الكيلو`;
+        }
         if (r.qty === '' || r.qty === undefined) {
           r.qty = 1; r.bulk = true;
           r.notes = (r.notes ? r.notes + ' • ' : '') + `وزن بدون عدد — سجلته 1 × ${r.weight}${r.unit || 'ك'}`;
@@ -416,7 +432,8 @@ function mergePhotos(app, vouchers, images, text) {
     /* بنود بنفس الفاتورة بتطلع نفس الصنف والحجم (محشي شطة + محشي جزر) بتنجمع بسطر واحد */
     const same = byKey.get(k).rows.find(x => x.msgHead === r.msgHead && x.item === r.item
       && String(x.weight) === String(r.weight) && String(x.unit || '') === String(r.unit || '') && !x.priceFromMsg && !r.priceFromMsg);
-    if (same && +same.qty > 0 && +r.qty > 0) {
+    /* بس إذا الاسم الأصلي اتغيّر بالقواعد (محشي شطة → محشي جزر) — غير هيك بيضلوا سطرين زي ما بتسجلهم */
+    if (same && +same.qty > 0 && +r.qty > 0 && pl !== body) {
       same.qty = +same.qty + +r.qty;
       if (r.notes) same.notes = (same.notes ? same.notes + ' • ' : '') + r.notes;
       same.original += ' + ' + r.original;
