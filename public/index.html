@@ -1235,6 +1235,12 @@ function matchSized(base,cands,unit,strictSize){
     const hit=fam.find(o=>o.inf.size===c);
     if(hit) return hit.it;
   }
+  /* الاسم + الحجم اسم بديل لصنف ثاني («مشوي محشي لبنة 5 ك» = « مصري مشوي محشي لبنة») */
+  for(const c of (cands||[])){
+    const ak=key(base+' '+c+' ك');
+    const al=items.find(it=>(it.aliases||[]).some(a=>key(a)===ak));
+    if(al) return al;
+  }
   /* الحجم مذكور صراحة بس مش موجود بالقائمة — ممنوع نخمّن حجم ثاني */
   if(strictSize) return null;
   if(fam.length===1) return fam[0].it;
@@ -1268,8 +1274,12 @@ function parseLine(rawLine,ctx){
   /* \b لا يشتغل مع العربية بالجافاسكربت — منستخدم حدود يدوية */
   const AB='[^\\u0600-\\u06FF\\w]';
   const hasWord=w=>new RegExp('(?:^|'+AB+')'+w).test(n);
-  const isOut=OUT_W.some(hasWord);
-  const isIn =IN_W.some(hasWord);
+  /* «مرتجع ل ابو الامين» = بضاعة راجعة منّا لعنده → إخراج (و«مرتجع من …» إدخال) */
+  /* بس «مرتجع ل اسلام» (للزبون نفسه) بيضل إدخال — رجعتله بضاعته */
+  const rtm=n.match(new RegExp('(?:^|'+AB+')(?:مرتجع|مرتحع|ارجاع|رجع|راجع)\\s+(?:ل\\s|لـ|الى\\s|إلى\\s|لل)\\s*([\\u0600-\\u06FF]+)'));
+  const retTo=!!rtm && !((settings&&settings.customers)||[]).some(c=>key(c.name)&&key(rtm[1]).startsWith(key(c.name)));
+  const isOut=retTo || OUT_W.some(hasWord);
+  const isIn =!retTo && IN_W.some(hasWord);
   if((isOut||isIn) && !/\d/.test(n.replace(/\d+[\/\-.]\d+/g,''))){
     ctx.voucher=isOut?'إخراج':'إدخال'; return null;
   }
