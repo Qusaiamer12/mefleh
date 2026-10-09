@@ -7,3 +7,6 @@ imports/
 *.zip
 WhatsApp*
 نسخة_*.json
+
+# سجلات تشغيل محلية
+*.log
