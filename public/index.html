@@ -718,6 +718,40 @@ tr.fDone td{opacity:.6}
 .card.empty{text-align:center;padding:42px 20px;color:var(--txt2)}
 .emptyIco{color:#a7b1ac;margin-bottom:8px}.emptyIco svg{width:34px;height:34px}
 
+/* ---------- طبقة اللون (بتكسر الأبيض) ---------- */
+:root{--bg:#edf2ef;--gold:#c9a54a}
+nav.tabs{background:linear-gradient(180deg,#0f3d2a 0%,#0b2e1f 100%);color:#cfe3d8;border-left:0}
+.navBrand{border-bottom-color:rgba(255,255,255,.1)}
+.navBrand b{color:#fff}.navBrand span{color:#9fc2b0}
+.navBrand img{box-shadow:0 0 0 2px rgba(201,165,74,.55)}
+nav.tabs .navTitle{color:#7fa892}
+nav.tabs button{color:#d3e6dc}
+nav.tabs button:hover{background:rgba(255,255,255,.07);color:#fff}
+nav.tabs button.active{background:rgba(255,255,255,.12);color:#fff;box-shadow:inset -3px 0 0 var(--gold)}
+nav.tabs button.active .nIco{color:var(--gold)}
+.navFoot{border-top-color:rgba(255,255,255,.1)}
+.navUser{color:#fff}
+.uAv{background:rgba(201,165,74,.22);color:#f3dfa6}
+.roleTag{background:var(--gold);color:#3a2c00;border-color:var(--gold)}
+.navOut{background:transparent;color:#ffb4ab;border-color:rgba(255,255,255,.16)}
+.navOut:hover{background:rgba(255,180,171,.1)}
+header{box-shadow:0 1px 0 var(--line),0 2px 10px rgba(16,24,20,.04)}
+.brandText h1{color:var(--brand)}
+.card h2{color:#123d29}
+th{background:#e8f1ec;color:#1f4d36;border-bottom-color:#d4e4da}
+.tw,.scroll{border-color:#d9e5de}
+.stat{border-top:3px solid var(--brand)}
+.stat:has(b.vOut){background:#fdf6f5;border-color:#f1d9d5;border-top-color:#c4321f}
+.stat:has(b.vIn){background:#f1f8f4;border-color:#d3e8db;border-top-color:var(--ok)}
+.stat.big{background:linear-gradient(135deg,#0f5c3a,#167a4e);border-color:#0f5c3a;border-top-color:var(--gold)}
+.stat.big span,.stat.big .sub,.stat.big .sub *{color:#d5ebde !important}
+.stat.big b{color:#fff}
+.custHead h2{color:var(--brand)}
+.statementHeader.card{background:linear-gradient(90deg,#fff 0%,#f4f9f6 100%)}
+.flagTag{box-shadow:0 0 0 2px #fff}
+td[data-f="notes"]{min-width:170px}
+td[data-f="notes"] .flagNote{min-width:150px}
+
 /* ---------- الشاشات الصغيرة ---------- */
 @media(max-width:900px){
   header{padding:0 14px}
@@ -3130,7 +3164,7 @@ function drawRows(){
     <div class="tw"><table>
       <thead><tr><th>#</th><th>اليوم</th><th>الصنف</th><th>الوزن</th><th>الوحدة</th>
       <th>العدد</th><th>سعر العبوة</th><th>الإجمالي</th><th>ملاحظات</th><th></th></tr></thead>
-      <tbody>${vis.map(({r,i})=>`<tr data-i="${i}" class="${r.notes?'warn':''}">
+      <tbody>${vis.map(({r,i})=>{ const dfl=draftRowFlags(r); return `<tr data-i="${i}" class="${dfl.length?'hasFlag':r.notes?'warn':''}">
         <td>${i+1}</td>
         <td><input value="${esc(r.day)}" style="width:78px" onchange="upd(${i},'day',this.value)"></td>
         <td class="name"><input list="itemList" value="${esc(r.item)}" style="min-width:165px" onchange="upd(${i},'item',this.value)"></td>
@@ -3139,9 +3173,11 @@ function drawRows(){
         <td><input type="number" step="any" value="${esc(r.qty)}" style="width:72px" onchange="upd(${i},'qty',this.value)"></td>
         <td><input type="number" step="any" value="${esc(r.price)}" style="width:85px" onchange="upd(${i},'price',this.value)"></td>
         <td data-f="total"><b>${r.total===''?'—':fx(r.total)}</b></td>
-        <td data-f="notes" style="text-align:right;font-size:12.5px">${esc(r.notes)||'<span class="chip cOk">تمام</span>'}</td>
-        <td style="white-space:nowrap"><button class="btn blue sm" title="أضف سطر تحت هالسطر" onclick="addRow(${i})">+ تحته</button>
-          <button class="btn danger sm" onclick="delRow(${i})">حذف</button></td></tr>`).join('')
+        <td data-f="notes" style="text-align:right;font-size:12.5px">${esc(r.notes)||(dfl.length?'':'<span class="chip cOk">تمام</span>')}${dfl.map(f=>`<div class="flagNote"><span class="fIco">${FLAG_SVG}</span><span class="flagTxt">${esc(f.text)}</span>
+            <button class="lnk" onclick="removeDraftFlag(${jsArg(f.id)})">شيل</button></div>`).join('')}</td>
+        <td style="white-space:nowrap"><button class="flagBtn" title="ملاحظة على هذا البند — بتطلع بصفحة الملاحظات بعد الحفظ" onclick="addDraftFlag(${i})">${FLAG_SVG}<span>ملاحظة</span></button>
+          <button class="btn blue sm" title="أضف سطر تحت هالسطر" onclick="addRow(${i})">+ تحته</button>
+          <button class="btn danger sm" onclick="delRow(${i})">حذف</button></td></tr>`;}).join('')
         ||'<tr><td colspan="10">ما في بنود مطابقة</td></tr>'}
         <tr class="tot"><td colspan="5">الإجمالي</td><td id="sumQty">${fx(sum('qty'))}</td>
         <td></td><td id="sumTot">${fx(sum('total'))}</td><td colspan="2" id="warnChip">${warns?`<span class="chip cWarn">${warns} تنبيه</span>`:'<span class="chip cOk">لا تنبيهات</span>'}</td></tr>
@@ -3153,6 +3189,27 @@ function drawRows(){
     </div>
     ${lastSkipped.length?skipBox():''}
   </div>`;
+}
+/* ملاحظات وقت الإدخال/التعديل: بتنحفظ بالمسودة، وبتنتقل للسند لما ينحفظ */
+const draftRowFlags=r=>(draft.flags||[]).filter(f=>!f.done&&r&&r.id&&f.row===r.id);
+async function addDraftFlag(i){
+  const r=draft.rows[i]; if(!r) return;
+  if(!r.id) r.id=uid();
+  const res=await ask({title:'إضافة ملاحظة',ok:'حفظ الملاحظة',
+    body:`<div class="flagCtx">${esc(draft.customer||'—')} · ${esc(draft.date||'')} · ${esc(draft.voucher||'')}</div>
+      <div style="margin:6px 0 10px"><b>${esc(r.item||'(بدون اسم)')}</b>
+        <span class="mut">${esc(r.qty??'')} × ${esc(r.weight??'')}${esc(r.unit||'')} · ${fx(r.price)}</span></div>
+      <textarea id="__fl" class="mInput" placeholder="شو الشي اللي شاكك فيه؟" style="min-height:96px"></textarea>`});
+  const text=res&&res.vals?String(res.vals.__fl||'').trim():'';
+  if(!text) return;
+  draft.flags=(draft.flags||[]).concat({id:uid(),row:r.id,text,by:SESSION.name,at:new Date().toISOString(),done:false});
+  try{ localStorage.setItem('wh_draft',JSON.stringify(draft)); }catch(e){}
+  drawRows(); notify('انضافت الملاحظة — بتنحفظ مع السند','ok');
+}
+function removeDraftFlag(fid){
+  draft.flags=(draft.flags||[]).filter(f=>f.id!==fid);
+  try{ localStorage.setItem('wh_draft',JSON.stringify(draft)); }catch(e){}
+  drawRows();
 }
 function skipBox(){
   return `<div class="note"><b>⚠️ سطور فيها أرقام وما فهمتها — راجعها وأدخلها يدوي:</b><br>
@@ -3251,6 +3308,7 @@ async function saveDraft(){
     toast(`✅ تم حفظ السند ${inv.no}`);
     draft={id:'',no:'',customer:inv.customer,voucher:inv.voucher,date:todayStr(),day:'',rows:[]};
     lastSkipped=[]; vEntry();
+    try{ paintNav(); }catch(e){}
   }
 }
 /* بناء السند وإضافته للقائمة (مشترك بين الحفظ العادي والاستيراد).
@@ -3270,8 +3328,9 @@ function commitInvoice(d,extra){
        لو صار سند ثاني (زبون/تاريخ غير) ما بيضل يحجز مفتاح الاستيراد */
     old&&old.importKey&&old.customer===d.customer&&old.date===d.date&&old.voucher===d.voucher
       ?{src:old.src,importKey:old.importKey,review:false}:{},
-    /* الملاحظات بتضل مع السند لما ينعدّل */
-    old&&Array.isArray(old.flags)&&old.flags.length?{flags:old.flags}:{},
+    /* الملاحظات: اللي بالمسودة (إدخال/تعديل) وإلا بتضل اللي كانت مع السند */
+    Array.isArray(d.flags)&&(d.flags.length||(old&&old.flags&&old.flags.length))?{flags:JSON.parse(JSON.stringify(d.flags))}
+      :old&&Array.isArray(old.flags)&&old.flags.length?{flags:old.flags}:{},
     extra||{});
   if(editing){
     if(ix>=0) invoices[ix]=inv; else invoices.unshift(inv);
@@ -3473,7 +3532,7 @@ function editInv(id){
   const v=invoices.find(x=>x.id===id); if(!v)return;
   if(!isAdmin() && v.customer !== myCustomer()){ notify('ما إلك صلاحية التعديل','bad'); return; }
   draft={id:v.id,no:v.no,customer:v.customer,voucher:v.voucher,date:v.date,day:'',
-    rows:JSON.parse(JSON.stringify(v.rows))};
+    rows:JSON.parse(JSON.stringify(v.rows)),flags:JSON.parse(JSON.stringify(v.flags||[]))};
   lastSkipped=[]; go('entry'); toast('تعديل السند '+v.no);
 }
 async function delInv(id){
