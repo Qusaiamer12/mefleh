@@ -7,6 +7,9 @@
 <link rel="icon" type="image/png" href="/icon.png?v=2">
 <link rel="apple-touch-icon" href="/icon.png?v=2">
 <link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
 <meta name="theme-color" content="#075e35">
 <style>
 :root{
@@ -524,15 +527,223 @@ details.card summary::marker{color:var(--g)}
   a[href]:after{content:''}
   .noprint,.noprint *{display:none !important}
 }
+
+/* =====================================================================
+   الواجهة v2 — تصميم محاسبي نظيف (للشاشة بس؛ الطباعة بتضل زي ما هي)
+   ===================================================================== */
+@media screen{
+:root{
+  --brand:#0f5c3a; --brand-d:#0b4a2e; --brand-s:#e9f3ed; --brand-l:#cfe5d8;
+  --g:#0f5c3a; --g2:#0b4a2e; --bg:#f4f6f5; --surf:#fff;
+  --line:#e3e7e5; --line2:#d3d9d6; --txt:#17211c; --txt2:#3a4540; --mut:#6b7671;
+  --r:#b42318; --ok:#067647; --amb:#a15c07; --amb-s:#fff7e8; --amb-l:#f3d9a4;
+  --rad:10px; --sh:0 1px 2px rgba(16,24,20,.05);
+}
+body,input,select,textarea,button{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif}
+body{background:var(--bg);color:var(--txt);font-size:14px;-webkit-font-smoothing:antialiased}
+td,.stat b,.amt,.cliBal{font-variant-numeric:tabular-nums}
+
+/* ---------- الترويسة ---------- */
+header{background:var(--surf);color:var(--txt);box-shadow:none;border-bottom:1px solid var(--line);
+  padding:0 24px;height:60px;display:flex;align-items:center}
+.logoWrap{width:100%;gap:12px}
+.hdrMenu{width:36px;height:36px;border:1px solid var(--line);background:var(--surf);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;padding:0}
+.hdrMenu:hover{background:#f3f6f4}
+.hdrMenu svg{width:18px;height:18px;stroke:var(--txt2);stroke-width:1.8;fill:none;stroke-linecap:round}
+.brandLogo{display:none}
+.brandText h1{font-size:18px;font-weight:600;color:var(--txt);letter-spacing:0}
+.brandText p{display:none}
+.hdrInfo{color:var(--mut);font-size:12px;line-height:1.7;display:flex;flex-direction:column;align-items:flex-end}
+.hdrInfo b{color:var(--txt2);font-weight:600}
+.tzTag{background:#f1f4f2;border:1px solid var(--line);color:var(--mut);border-radius:6px}
+.netDot{border:1px solid var(--line);font-weight:600;font-size:11.5px}
+.netDot.on{background:#edf7f1;color:var(--ok);border-color:#cfe6d8}
+.netDot.off{background:#fdecea;color:var(--r);border-color:#f6cdc8}
+#navNotch{display:none !important}
+
+/* ---------- القائمة الجانبية ---------- */
+nav.tabs{background:var(--surf);color:var(--txt2);border-left:1px solid var(--line);box-shadow:none;
+  padding:14px 12px;gap:2px}
+.navBrand{display:flex;align-items:center;gap:10px;padding:4px 6px 16px;margin-bottom:6px;
+  border-bottom:1px solid var(--line)}
+.navBrand img{width:38px;height:38px;border-radius:9px;object-fit:cover;flex:0 0 auto}
+.navBrand b{display:block;font-size:15px;color:var(--txt);font-weight:700}
+.navBrand span{display:block;font-size:11.5px;color:var(--mut)}
+nav.tabs .navTitle{font-size:11px;color:#8a948f;font-weight:600;letter-spacing:.2px;border:0;
+  padding:14px 10px 4px;margin:0}
+nav.tabs button{display:flex;align-items:center;gap:10px;color:var(--txt2);font-weight:500;
+  font-size:14px;padding:8px 10px;min-height:40px;border-radius:8px}
+nav.tabs button:hover{background:#f2f5f3}
+nav.tabs button.active{background:var(--brand-s);color:var(--brand);font-weight:600}
+.nIco{width:18px;height:18px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+nav.tabs button.active .nIco{opacity:1}
+.nLbl{flex:1;display:flex;align-items:center;gap:6px}
+.badgeN{margin:0;margin-inline-start:auto;background:#d92d20;font-size:11px;padding:1px 7px}
+.navFoot{border-top:1px solid var(--line);padding-top:12px}
+.navUser{display:flex;align-items:center;gap:8px;color:var(--txt2);font-weight:600;padding:0 6px 10px}
+.uAv{width:30px;height:30px;border-radius:50%;background:var(--brand-s);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 auto}
+.roleTag{background:#f1f4f2;color:var(--mut);border:1px solid var(--line);font-weight:600}
+.navOut{background:var(--surf);color:var(--r);border:1px solid var(--line);font-weight:600}
+.navOut:hover{background:#fdf3f2}
+#navScrim{background:rgba(16,24,20,.35)}
+
+/* ---------- المحتوى ---------- */
+main{padding:22px 24px;gap:16px;grid-template-columns:minmax(0,1fr)}
+main>*{min-width:0}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:var(--sh)}
+.card h2{font-size:16px;font-weight:600;color:var(--txt);margin:0 0 6px}
+.cardHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.cardHead h2{margin:0}
+.hint,.small{font-size:13px;color:var(--mut);line-height:1.75}
+label{font-size:12.5px;font-weight:600;color:var(--txt2)}
+input,select,textarea{border:1px solid var(--line2);border-radius:8px;padding:8px 11px;font-size:14px;
+  min-height:40px;background:var(--surf);transition:border-color .15s,box-shadow .15s}
+textarea{min-height:120px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(15,92,58,.12)}
+input:disabled{background:#f5f7f6;color:var(--mut)}
+.row,.btns{gap:8px}
+
+/* ---------- الأزرار ---------- */
+button.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  background:var(--brand);color:#fff;border:1px solid var(--brand);border-radius:8px;
+  padding:8px 14px;min-height:38px;font-size:13.5px;font-weight:600;transition:background .15s,border-color .15s}
+button.btn:hover{background:var(--brand-d);border-color:var(--brand-d)}
+button.blue,button.sec,button.alt,button.ghost{background:var(--surf);color:var(--txt);border-color:var(--line2)}
+button.blue:hover,button.sec:hover,button.alt:hover,button.ghost:hover{background:#f3f6f4;border-color:#c3cac6}
+button.danger,button.red{background:var(--surf);color:var(--r);border-color:#f1c9c4}
+button.danger:hover,button.red:hover{background:#fdf3f2;border-color:#e9aaa2}
+button.orange,button.gold{background:var(--amb-s);color:#7a4a05;border-color:var(--amb-l)}
+button.orange:hover,button.gold:hover{background:#fdeecf;border-color:#e9c477}
+button.sm{padding:5px 10px;min-height:30px;font-size:12.5px;border-radius:7px}
+button.big{padding:10px 20px;min-height:44px;font-size:15px}
+button.btn:disabled{opacity:.5}
+button.waBtn{background:#1f9d55;border-color:#1f9d55;color:#fff}
+button.waBtn:hover{background:#188246;border-color:#188246}
+.waIco{width:16px;height:16px;fill:currentColor;flex:0 0 auto}
+label.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;margin:0;
+  border:1px solid var(--line2);background:var(--surf);color:var(--txt);border-radius:8px;
+  padding:8px 14px;min-height:38px;font-size:13.5px;font-weight:600;cursor:pointer}
+label.btn:hover{background:#f3f6f4;border-color:#c3cac6}
+.lnk{background:none;border:0;color:var(--brand);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;padding:0 4px}
+.lnk:hover{text-decoration:underline}
+
+/* ---------- الجداول ---------- */
+.tw,.scroll{border:1px solid var(--line);border-radius:10px;background:var(--surf)}
+table{background:var(--surf)}
+th{background:#f6f8f7;color:#4a5651;font-weight:600;font-size:12.5px;border:0;
+  border-bottom:1px solid var(--line);padding:9px 10px}
+td{border:0;border-bottom:1px solid #eef1ef;padding:8px 10px;font-size:13.5px}
+tbody tr:last-child td{border-bottom:0}
+table:not(.sheet) tbody tr:hover td{background:#fafcfb}
+table:not(.sheet) tr.tot td,table:not(.sheet) .totalRow td{background:#f6f8f7;font-weight:700}
+td input,td select{border:1px solid transparent;background:transparent;min-height:32px;border-radius:6px}
+td input:hover,td select:hover{border-color:var(--line2)}
+td input:focus,td select:focus{background:var(--surf);border-color:var(--brand)}
+tr.warn td{background:#fffaf0}
+tr.ok td{background:#f3faf6}
+.vOut{color:#b42318}
+.vIn{color:var(--ok)}
+
+/* الكشف (sheet) — نفس الشكل المطبوع بس أنعم */
+table.sheet td,table.sheet th{border-color:#d9dfdc}
+.tw table.sheet{border-style:hidden}
+
+/* ---------- الأرقام ---------- */
+.totals{gap:12px;margin-bottom:0}
+.box,.stat{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+  text-align:right;box-shadow:var(--sh)}
+.box span,.stat span{font-size:12.5px;color:var(--mut);font-weight:500}
+.box b,.stat b{font-size:22px;font-weight:700;color:var(--txt);margin-top:6px}
+.stat b.vOut{color:#b42318}.stat b.vIn{color:var(--ok)}
+.stat.big b{font-size:24px;color:var(--brand)}
+.stat .sub{font-size:12px;color:var(--mut);font-weight:500;margin-top:4px}
+
+/* ---------- شارات وصناديق ---------- */
+.badge,.chip{background:#f1f4f2;border:1px solid var(--line);color:var(--txt2);font-weight:600}
+.chip.cOk{background:#edf7f1;border-color:#cfe6d8;color:var(--ok)}
+.chip.cWarn{background:var(--amb-s);border-color:var(--amb-l);color:var(--amb)}
+.note{background:#fffaf0;border:1px solid #f3e1b5;border-radius:10px;color:#5c4510}
+.okbox{background:#f0f8f3;border:1px solid #cfe6d8;border-radius:10px}
+.revTag{background:var(--amb-s);color:var(--amb);border-color:var(--amb-l);font-weight:600}
+.statementHeader{gap:16px}
+.reportLogo{width:96px;border-width:1px}
+.custHead{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px;align-items:center}
+.custHead h2{font-size:17px;color:var(--txt);font-weight:700}
+.custMeta{font-weight:500}
+details.card summary{color:var(--txt);font-weight:600}
+details.card summary::marker{color:var(--mut)}
+.toast{background:#17211c;border-radius:10px;font-weight:500;box-shadow:0 10px 30px rgba(16,24,20,.25)}
+.toast.t-ok{background:#0f5c3a}.toast.t-warn{background:#8a5a0b}.toast.t-bad{background:#912018}
+.modalWrap{background:rgba(16,24,20,.45)}
+.modal{border-radius:14px;padding:22px;box-shadow:0 20px 50px rgba(16,24,20,.25)}
+.modal h3{color:var(--txt);font-weight:600;font-size:17px}
+.modal .mBody{color:var(--txt2)}
+.modal textarea.mInput{width:100%;min-height:96px}
+.cliCard{border:1px solid var(--line);border-radius:12px}
+.cliCard.on{border-color:var(--brand);border-width:1px;box-shadow:0 0 0 3px rgba(15,92,58,.1)}
+.priceCell .editHint{display:none}
+.priceCell:hover{background:var(--amb-s);outline:1px solid var(--amb-l)}
+code{background:#f3f6f4;border-color:var(--line)}
+
+/* ---------- الملاحظات ---------- */
+.segs{display:inline-flex;background:#f1f4f2;border:1px solid var(--line);border-radius:9px;padding:3px;gap:2px}
+.seg{border:0;background:transparent;font:inherit;font-size:13px;font-weight:600;color:var(--mut);
+  padding:6px 12px;border-radius:7px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.seg span{font-size:11.5px;background:#e3e8e5;border-radius:99px;padding:0 7px;color:var(--txt2)}
+.seg.on{background:var(--surf);color:var(--txt);box-shadow:0 1px 2px rgba(16,24,20,.1)}
+.flagBtn{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line2);background:var(--surf);
+  color:var(--mut);border-radius:7px;padding:3px 8px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.flagBtn svg,.fIco svg,.flagTag svg,.emptyIco svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round}
+.flagBtn:hover{color:var(--amb);border-color:var(--amb-l);background:var(--amb-s)}
+.flagBtn.mini{padding:1px 5px;margin-inline-start:6px;border-color:transparent;background:transparent;opacity:0;vertical-align:middle}
+table.sheet tr:hover .flagBtn.mini{opacity:.7}
+.flagBtn.mini.on{opacity:1;color:var(--amb);background:var(--amb-s);border-color:var(--amb-l)}
+.flagBtn.mini.on svg{fill:currentColor}
+.flagNote{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--amb-s);border:1px solid var(--amb-l);
+  border-radius:8px;padding:5px 9px;margin:5px 0;font-size:12.5px;color:#5c3d05;text-align:right}
+.fIco{color:var(--amb);display:inline-flex}.fIco svg{fill:currentColor}
+tr.hasFlag td{background:#fffcf5}
+.flagTag{display:inline-flex;align-items:center;gap:3px;background:var(--amb-s);color:var(--amb);
+  border:1px solid var(--amb-l);border-radius:99px;padding:0 7px;font-size:11.5px;font-weight:700;vertical-align:middle}
+.flagTag svg{width:11px;height:11px;fill:currentColor}
+.flagCtx{font-size:12.5px;color:var(--mut)}
+.flagTbl td.flagTxt{max-width:340px;white-space:pre-wrap;color:var(--txt)}
+.flagTbl .acts button{margin:2px}
+tr.fDone td{opacity:.6}
+.nowrap{white-space:nowrap}
+.mut.sm,.sm.mut{font-size:12px}
+.card.empty{text-align:center;padding:42px 20px;color:var(--txt2)}
+.emptyIco{color:#a7b1ac;margin-bottom:8px}.emptyIco svg{width:34px;height:34px}
+
+/* ---------- الشاشات الصغيرة ---------- */
+@media(max-width:900px){
+  header{padding:0 14px}
+  .brandLogo{display:block;width:30px;height:30px;border-radius:7px}
+}
+@media(max-width:600px){
+  main{padding:12px;gap:12px}
+  .card{padding:14px;border-radius:12px}
+  header{height:56px}
+  .hdrInfo{display:none}
+  .brandText{min-width:0;flex:1}
+  .brandText h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  nav.tabs{border-left:0}
+  .stat b,.box b{font-size:19px}
+}
+}
 </style>
 </head>
 <body>
 
 <header>
   <div class="logoWrap">
+    <button class="hdrMenu" onclick="toggleNav()" aria-label="القائمة"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     <img class="brandLogo" id="brandLogo" alt="ALMEFLEH" src="/icon.png?v=2">
     <div class="brandText">
-      <h1>نظام كشوفات المستودع</h1>
+      <h1 id="hdrTitle">نظام كشوفات المستودع</h1>
       <p><span class="brandSub">ALMEFLEH</span> — منذ 1972 · شركة عبد الرؤوف المفلح وأولاده</p>
     </div>
     <div class="hdrInfo">
@@ -645,6 +856,33 @@ function ask(opts){
 }
 /* رسالة معلومات (بدل alert) */
 function say(title,body){ return ask({title,body,ok:'حسنًا',cancel:null}).then(()=>{}); }
+
+/* ===== واجهة نظيفة: بنشيل الإيموجي والأرقام المدوّرة من نصوص الواجهة =====
+   (الأزرار والعناوين والرسائل). ما بنلمس الحقول ولا الرسائل ولا نص الملاحظات. */
+const EMOJI_HAS=/[①-⑳]|\p{Extended_Pictographic}/u;
+const EMOJI_ALL=/(?:[①-⑳]|\p{Extended_Pictographic})[️⃣]?\s?/gu;
+const UI_SKIP='textarea,input,select,script,style,pre,.bTxt,.flagTxt,[data-raw]';
+function fixUIText(n){
+  const t=n.nodeValue;
+  if(!t||!EMOJI_HAS.test(t)) return;
+  const p=n.parentElement; if(!p||p.closest(UI_SKIP)) return;
+  const c=t.replace(EMOJI_ALL,'');
+  if(c!==t) n.nodeValue=c;
+}
+function cleanUI(root){
+  if(!root) return;
+  if(root.nodeType===3){ fixUIText(root); return; }
+  if(root.nodeType!==1||root.closest(UI_SKIP)) return;
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  let n; while((n=w.nextNode())) fixUIText(n);
+}
+try{
+  const _uiMo=new MutationObserver(ms=>{ for(const m of ms){
+    if(m.type==='characterData') fixUIText(m.target); else m.addedNodes.forEach(cleanUI); } });
+  const _uiStart=()=>{ cleanUI(document.body);
+    _uiMo.observe(document.body,{childList:true,subtree:true,characterData:true}); };
+  if(document.body) _uiStart(); else document.addEventListener('DOMContentLoaded',_uiStart);
+}catch(e){}
 
 /* تطبيع النص العربي — أساس مطابقة الأصناف */
 const AR_NUM={'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'};
@@ -1966,21 +2204,146 @@ let TABS=[];
 function buildTabs(){
   const nb=unreadN(), mb=unreadM(), rb=pendingReqs();
   const bdg=n=>n?` <span class="badgeN">${n}</span>`:'';
+  const fb=openFlags().length;
   TABS = isAdmin()
-    ? [['entry','① إدخال سند'],['invoices','② السندات المحفوظة'],
-       ['report','③ الكشف والتقارير'],['items','④ قائمة الأسعار'],
-       ['ledger','🧮 كشف حساب لزبوني'],
-       ['consumption','📊 معدل الاستهلاك'],
-       ['requests','📝 طلبات التعديل'+bdg(rb)],
-       ['messages','💬 الرسائل'+bdg(mb)],
-       ['alerts','🔔 الإشعارات'+bdg(nb)],
-       ['settings','⑤ الإعدادات والنسخ']]
-    : [['report','📄 كشف حسابي'],['invoices','🧾 سنداتي'],
-       ['ledger','🧮 كشف حساب لزبوني'],
-       ['messages','💬 الرسائل'+bdg(mb)],
-       ['alerts','🔔 الإشعارات'+bdg(nb)],
-       ['account','👤 حسابي']];
+    ? [['entry','إدخال سند'],['invoices','السندات'],
+       ['report','الكشوفات والتقارير'],['flags','الملاحظات'+bdg(fb)],
+       ['items','قائمة الأسعار'],['ledger','كشف حساب لزبوني'],
+       ['consumption','معدل الاستهلاك'],
+       ['requests','طلبات التعديل'+bdg(rb)],
+       ['messages','الرسائل'+bdg(mb)],
+       ['alerts','الإشعارات'+bdg(nb)],
+       ['settings','الإعدادات والنسخ']]
+    : [['report','كشف حسابي'],['invoices','سنداتي'],
+       ['ledger','كشف حساب لزبوني'],
+       ['messages','الرسائل'+bdg(mb)],
+       ['alerts','الإشعارات'+bdg(nb)],
+       ['account','حسابي']];
   return TABS;
+}
+/* أيقونات خطّية للقائمة الجانبية */
+const NAV_ICON={
+  entry:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v7M8.5 14.5h7"/>',
+  invoices:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+  report:'<path d="M3 3v18h18"/><path d="M7 15v3M11 11v7M15 7v11M19 12v6"/>',
+  flags:'<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  items:'<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  ledger:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h1M14 11h1M9 15h1M14 15h1"/>',
+  consumption:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  requests:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  messages:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  alerts:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  settings:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  account:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'
+};
+const NAV_GROUP={entry:'العمليات',report:'التقارير',items:'البيانات',requests:'التواصل',settings:'النظام'};
+const navIcon=k=>`<svg class="nIco" viewBox="0 0 24 24">${NAV_ICON[k]||''}</svg>`;
+
+/* ===== الملاحظات (نوت) =====
+   وقت المراجعة: علامة على بند أو سند مشكوك فيه. بتنحفظ جوّا السند نفسه
+   (v.flags) فبتتزامن مع السحابة زي أي تعديل، وما بتأثر على الأرقام.  */
+const FLAG_SVG='<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+function openFlags(){
+  const out=[];
+  (Array.isArray(invoices)?invoices:[]).forEach(v=>(v.flags||[]).forEach(f=>{ if(!f.done) out.push({v,f}); }));
+  return out;
+}
+const openFlagsOf=v=>(v.flags||[]).filter(f=>!f.done).length;
+const rowFlags=(v,rowId)=>(v.flags||[]).filter(f=>!f.done&&(f.row||null)===(rowId||null));
+function flagWhat(v,f){
+  if(!f.row) return '<span class="mut">السند كامل</span>';
+  const r=(v.rows||[]).find(x=>x.id===f.row);
+  if(!r) return '<span class="mut">بند انحذف من السند</span>';
+  return `<b>${esc(r.item)}</b> <span class="mut">${esc(r.qty??'')} × ${esc(r.weight??'')}${esc(r.unit||'')} · ${fx(r.price)}</span>`;
+}
+async function addFlag(invId,rowId){
+  if(!isAdmin()) return;
+  const v=invoices.find(x=>x.id===invId); if(!v) return;
+  const f0={row:rowId||null};
+  const res=await ask({title:'إضافة ملاحظة',ok:'حفظ الملاحظة',
+    body:`<div class="flagCtx">${esc(v.no)} · ${esc(v.customer)} · ${esc(v.date)} · ${esc(v.voucher)}</div>
+      <div style="margin:6px 0 10px">${flagWhat(v,f0)}</div>
+      <textarea id="__fl" class="mInput" placeholder="شو الشي اللي شاكك فيه؟" style="min-height:96px"></textarea>`});
+  const text=res&&res.vals?String(res.vals.__fl||'').trim():'';
+  if(!text) return;
+  const at=new Date().toISOString();
+  v.flags=(v.flags||[]).concat({id:uid(),row:rowId||null,text,by:SESSION.name,at,done:false});
+  v.savedAt=at; saveInv();
+  logAction('ملاحظة',v,text);
+  notify('انحفظت الملاحظة','ok');
+  refreshFlagsUI(invId);
+}
+function resolveFlag(invId,fid,done){
+  if(!isAdmin()) return;
+  const v=invoices.find(x=>x.id===invId); const f=v&&(v.flags||[]).find(x=>x.id===fid); if(!f) return;
+  const at=new Date().toISOString();
+  f.done=!!done; f.doneBy=done?SESSION.name:''; f.doneAt=done?at:'';
+  v.savedAt=at; saveInv();
+  logAction(done?'حل ملاحظة':'فتح ملاحظة',v,f.text);
+  refreshFlagsUI(invId);
+}
+async function delFlag(invId,fid){
+  if(!isAdmin()) return;
+  const v=invoices.find(x=>x.id===invId); const f=v&&(v.flags||[]).find(x=>x.id===fid); if(!f) return;
+  if(!await ask({title:'حذف الملاحظة',danger:true,ok:'احذف',body:`«${esc(f.text)}»`})) return;
+  v.flags=v.flags.filter(x=>x.id!==fid); v.savedAt=new Date().toISOString(); saveInv();
+  logAction('حذف ملاحظة',v,f.text);
+  refreshFlagsUI(invId);
+}
+function refreshFlagsUI(invId){
+  try{ paintNav(); }catch(e){}
+  if(TAB==='flags') vFlags();
+  else if(TAB==='report') drawRep();
+  else if(TAB==='invoices' && $('invDetail')){ const keep=window.scrollY; drawInv(); viewInv(invId,true); window.scrollTo(0,keep); }
+}
+function openFlagInv(invId){
+  const v=invoices.find(x=>x.id===invId); if(!v) return;
+  fInv={q:'',cust:v.customer,vou:v.voucher,from:v.date,to:v.date,rev:false};
+  go('invoices'); viewInv(invId);
+}
+let fFlags={st:'open',cust:''};
+function vFlags(){
+  if(!isAdmin()){ go('report'); return; }
+  const all=[]; invoices.forEach(v=>(v.flags||[]).forEach(f=>all.push({v,f})));
+  const nOpen=all.filter(x=>!x.f.done).length, nDone=all.length-nOpen;
+  const L=all.filter(x=>(fFlags.st==='all'||(fFlags.st==='open'?!x.f.done:x.f.done))
+                      &&(!fFlags.cust||x.v.customer===fFlags.cust))
+             .sort((a,b)=>String(b.f.at).localeCompare(String(a.f.at)));
+  const by={}; L.forEach(x=>(by[x.v.customer]=by[x.v.customer]||[]).push(x));
+  const when=iso=>{ try{ return new Date(iso).toLocaleString('ar-JO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } };
+  const seg=(k,l,n)=>`<button class="seg ${fFlags.st===k?'on':''}" onclick="fFlags.st=${jsArg(k)};vFlags()">${l}<span>${n}</span></button>`;
+  $('view').innerHTML=`
+  <div class="card">
+    <h2>الملاحظات</h2>
+    <p class="hint">كل بند أو سند حطّيتله ملاحظة وقت المراجعة. افتح السند وصلّح، وبعدين علّم الملاحظة «تمت».
+      بتضيف ملاحظة من زر <b>ملاحظة</b> جنب أي بند بعرض السند أو بالكشف.</p>
+    <div class="row">
+      <div class="segs">${seg('open','مفتوحة',nOpen)}${seg('done','تمت',nDone)}${seg('all','الكل',all.length)}</div>
+      <select style="width:auto;min-width:160px" onchange="fFlags.cust=this.value;vFlags()">
+        <option value="">كل الزباين</option>${custNames().map(c=>`<option ${fFlags.cust===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
+    </div>
+  </div>
+  ${L.length?Object.keys(by).map(c=>`
+  <div class="card">
+    <div class="cardHead"><h2>${esc(c)}</h2><span class="chip">${by[c].length}</span></div>
+    <div class="tw"><table class="flagTbl">
+      <thead><tr><th>التاريخ</th><th>السند</th><th>البند</th><th>الملاحظة</th><th>بواسطة</th><th></th></tr></thead>
+      <tbody>${by[c].map(({v,f})=>`<tr class="${f.done?'fDone':''}">
+        <td class="nowrap">${esc(v.date)}</td>
+        <td class="nowrap"><b>${esc(v.no)}</b><div class="mut sm">${esc(v.voucher)}</div></td>
+        <td class="name">${flagWhat(v,f)}</td>
+        <td class="name flagTxt">${esc(f.text)}${f.done?`<div class="mut sm">تمت — ${esc(f.doneBy||'')} ${when(f.doneAt)}</div>`:''}</td>
+        <td class="nowrap mut sm">${esc(f.by||'')}<div>${when(f.at)}</div></td>
+        <td class="nowrap acts">
+          <button class="btn sec sm" onclick="openFlagInv(${jsArg(v.id)})">فتح السند</button>
+          ${f.done?`<button class="btn sec sm" onclick="resolveFlag(${jsArg(v.id)},${jsArg(f.id)},false)">إعادة فتح</button>`
+                  :`<button class="btn sm" onclick="resolveFlag(${jsArg(v.id)},${jsArg(f.id)},true)">تمت</button>`}
+          <button class="btn danger sm" onclick="delFlag(${jsArg(v.id)},${jsArg(f.id)})">حذف</button>
+        </td></tr>`).join('')}</tbody>
+    </table></div>
+  </div>`).join(''):`<div class="card empty"><div class="emptyIco">${FLAG_SVG}</div>
+      <b>${fFlags.st==='open'?'ما في ملاحظات مفتوحة':'ما في ملاحظات'}</b>
+      <div class="hint">أي بند بتشك فيه وقت المراجعة، اضغط «ملاحظة» جنبه وبيطلع هون.</div></div>`}`;
 }
 
 function go(t){
@@ -2012,19 +2375,29 @@ function initNav(){
 
 function render(){
   if(!SESSION){ showLogin(); startClock(); paintNet(); return; }
-  buildTabs();
-  if(!TABS.some(t=>t[0]===TAB)) TAB=TABS[0][0];
-  $('nav').innerHTML=`<div class="navTitle">${isAdmin()?'الأقسام':'حسابي'}</div>`
-    +TABS.map(([k,l])=>`<button class="${k===TAB?'active':''}" onclick="go(${jsArg(k)})">${l}</button>`).join('')
-    +`<div class="navFoot">
-        <div class="navUser">👤 ${esc(SESSION.name)}${isAdmin()?' <span class="roleTag">مدير</span>':''}</div>
-        <button class="navOut" onclick="doLogout()">تسجيل خروج</button>
-      </div>`;
+  paintNav();
   const V={entry:vEntry,invoices:vInvoices,report:vReport,items:vItems,
            settings:vSettings,account:vAccount,requests:vRequests,
-           messages:vMessages,alerts:vAlerts,ledger:vLedger};
+           messages:vMessages,alerts:vAlerts,ledger:vLedger,flags:vFlags,
+           consumption:vConsumption};
   (V[TAB]||vReport)();
   startClock(); paintNet();
+}
+/* القائمة الجانبية + عنوان الصفحة بالترويسة */
+function paintNav(){
+  buildTabs();
+  if(!TABS.some(t=>t[0]===TAB)) TAB=TABS[0][0];
+  $('nav').innerHTML=`<div class="navBrand"><img src="/icon.png?v=2" alt="ALMEFLEH">
+      <div><b>المفلح</b><span>نظام المستودع والحسابات</span></div></div>`
+    +(isAdmin()?'':`<div class="navTitle">حسابي</div>`)
+    +TABS.map(([k,l])=>(isAdmin()&&NAV_GROUP[k]?`<div class="navTitle">${NAV_GROUP[k]}</div>`:'')
+      +`<button class="${k===TAB?'active':''}" onclick="go(${jsArg(k)})">${navIcon(k)}<span class="nLbl">${l}</span></button>`).join('')
+    +`<div class="navFoot">
+        <div class="navUser"><span class="uAv">${esc((SESSION.name||'?').trim().charAt(0))}</span>
+          <span>${esc(SESSION.name)}${isAdmin()?' <span class="roleTag">مدير</span>':''}</span></div>
+        <button class="navOut" onclick="doLogout()">تسجيل خروج</button>
+      </div>`;
+  try{ const cur=TABS.find(t=>t[0]===TAB); $('hdrTitle').textContent=cur?cur[1].replace(/<span[^>]*>.*?<\/span>/g,'').replace(/<[^>]*>/g,'').trim():''; }catch(e){}
 }
 
 /* ============ 📝 طلبات التعديل (مدير) ============ */
@@ -2897,6 +3270,8 @@ function commitInvoice(d,extra){
        لو صار سند ثاني (زبون/تاريخ غير) ما بيضل يحجز مفتاح الاستيراد */
     old&&old.importKey&&old.customer===d.customer&&old.date===d.date&&old.voucher===d.voucher
       ?{src:old.src,importKey:old.importKey,review:false}:{},
+    /* الملاحظات بتضل مع السند لما ينعدّل */
+    old&&Array.isArray(old.flags)&&old.flags.length?{flags:old.flags}:{},
     extra||{});
   if(editing){
     if(ix>=0) invoices[ix]=inv; else invoices.unshift(inv);
@@ -3036,7 +3411,7 @@ function drawInv(){
     <thead><tr><th>رقم السند</th><th>التاريخ</th><th>الزبون</th><th>النوع</th>
       <th>البنود</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
     <tbody>${L.length?L.map(v=>`<tr>
-      <td><b>${esc(v.no)}</b>${v.review&&isAdmin()?' <span class="revTag" title="مستورد من واتساب — بحاجة مراجعة">🟡 واتساب</span>':''}</td><td>${esc(v.date)}</td><td>${esc(v.customer)}</td>
+      <td><b>${esc(v.no)}</b>${v.review&&isAdmin()?' <span class="revTag" title="مستورد من واتساب — بحاجة مراجعة">🟡 واتساب</span>':''}${isAdmin()&&openFlagsOf(v)?` <span class="flagTag" title="ملاحظات مفتوحة">${FLAG_SVG}${openFlagsOf(v)}</span>`:''}</td><td>${esc(v.date)}</td><td>${esc(v.customer)}</td>
       <td class="${v.voucher==='إخراج'?'vOut':'vIn'}">${esc(v.voucher)}</td>
       <td>${v.rows.length}</td><td><b>${fx(v.total)}</b></td>
       <td>
@@ -3048,37 +3423,45 @@ function drawInv(){
   </div>
   <div id="invDetail"></div>`;
 }
-function viewInv(id){
+function viewInv(id,noScroll){
   const v=invoices.find(x=>x.id===id); if(!v)return;
   if(!isAdmin() && v.customer!==myCustomer()){ notify('ما إلك صلاحية','bad'); return; }
   if(!$('invDetail')) return;      /* التبويب مش مفتوح */
+  const adm=isAdmin(), vFl=adm?rowFlags(v,null):[];
+  const flagList=fl=>fl.map(f=>`<div class="flagNote"><span class="fIco">${FLAG_SVG}</span>
+      <span class="flagTxt">${esc(f.text)}</span><span class="mut sm">— ${esc(f.by||'')}</span>
+      <button class="lnk" onclick="resolveFlag(${jsArg(v.id)},${jsArg(f.id)},true)">تمت</button></div>`).join('');
   $('invDetail').innerHTML=`<div class="card watermark">
     <div class="statementHeader"><img class="reportLogo" src="${BADGE}" alt="ALMEFLEH">
       <h2 style="color:var(--g)">سند ${esc(v.voucher)} — ${esc(v.no)}</h2></div>
     <p class="hint">${esc(v.customer)} • ${esc(v.date)}</p>
+    ${vFl.length?`<div class="noprint">${flagList(vFl)}</div>`:''}
     <div class="tw"><table><thead><tr><th>#</th><th>اليوم</th><th>الصنف</th><th>الوزن</th>
-    <th>الوحدة</th><th>العدد</th><th>سعر العبوة</th><th>الإجمالي</th></tr></thead><tbody>
+    <th>الوحدة</th><th>العدد</th><th>سعر العبوة</th><th>الإجمالي</th>${adm?'<th class="noprint">ملاحظة</th>':''}</tr></thead><tbody>
     ${v.rows.map((r,i)=>{
       const pend=reqs.find(q=>q.invId===v.id&&q.rowId===r.id&&q.status==='pending');
-      return `<tr>
-      <td>${i+1}</td><td>${esc(r.day)}</td><td class="name">${esc(r.item)}</td>
+      const fl=adm?rowFlags(v,r.id):[];
+      return `<tr class="${fl.length?'hasFlag':''}">
+      <td>${i+1}</td><td>${esc(r.day)}</td><td class="name">${esc(r.item)}${fl.length?flagList(fl):''}</td>
       <td>${esc(r.weight)}</td><td>${esc(r.unit||'—')}</td><td>${esc(r.qty)}</td>
       <td class="priceCell ${pend?'pendPrice':''}"
           onclick="askPriceChange(${jsArg(v.id)},${jsArg(r.id)})" title="اضغط لطلب تعديل السعر">
         ${fx(r.price)}
         ${pend?`<div class="pendTag">بانتظار الموافقة: ${fx(pend.newPrice)}</div>`
                :`<span class="editHint">✎</span>`}</td>
-      <td>${fx(r.total)}</td></tr>`;}).join('')}
-    <tr class="tot"><td colspan="7">الإجمالي</td><td>${fx(v.total)}</td></tr>
+      <td>${fx(r.total)}</td>
+      ${adm?`<td class="noprint"><button class="flagBtn" title="ملاحظة على هذا البند" onclick="addFlag(${jsArg(v.id)},${jsArg(r.id)})">${FLAG_SVG}<span>ملاحظة</span></button></td>`:''}</tr>`;}).join('')}
+    <tr class="tot"><td colspan="7">الإجمالي</td><td>${fx(v.total)}</td>${adm?'<td class="noprint"></td>':''}</tr>
     </tbody></table></div>
     <p class="hint">💡 اضغط على أي <b>سعر</b> بالجدول عشان تطلب تعديله.</p>
     ${v.review&&isAdmin()?`<div class="note noprint">🟡 هذا السند مستورد من شات واتساب — راجع البنود والأسعار،
       وعدّل من «تعديل» إذا في غلط.</div>`:''}
     <div class="row" style="margin-top:12px">
       <button class="btn blue" onclick="window.print()">🖨️ طباعة / PDF</button>
+      ${adm?`<button class="btn sec" onclick="addFlag(${jsArg(v.id)},null)">ملاحظة على السند</button>`:''}
       ${v.review&&isAdmin()?`<button class="btn" onclick="markReviewed(${jsArg(v.id)})">✔ تمت المراجعة</button>`:''}
     </div></div>`;
-  try{ $('invDetail').scrollIntoView({behavior:'smooth'}); }catch(e){}
+  if(!noScroll) try{ $('invDetail').scrollIntoView({behavior:'smooth'}); }catch(e){}
 }
 function markReviewed(id){
   const v=invoices.find(x=>x.id===id); if(!v||!isAdmin()) return;
@@ -3250,8 +3633,8 @@ function pubStatusBox(){
     <div class="pubRow">${rows.filter(r=>r.has).map(r=>
       `<span class="pubTag ${r.pub?'on':'off'}" title="${r.pub?'نُشر '+esc(r.pub.at):'ما اننشر بعد'}"
         ${r.pub?`onclick="unpublishWeek(${jsArg(r.c)},${jsArg(wk)})"`:''}>
-        ${esc(r.c)} ${r.pub?'✅':'🔒'}</span>`).join('')}</div>
-    <div class="hint" style="margin:6px 0 0">🔒 = الزبون لسه ما بيشوف سندات هذا الأسبوع.</div>
+        ${esc(r.c)} · ${r.pub?'منشور':'مش منشور'}</span>`).join('')}</div>
+    <div class="hint" style="margin:6px 0 0">«مش منشور» = الزبون لسه ما بيشوف سندات هذا الأسبوع.</div>
   </div>`;
 }
 
@@ -3331,9 +3714,11 @@ const DAY_COLOR={'السبت':'d-sat','الأحد':'d-sun','الاثنين':'d-m
 function sectionTable(list,title,cls){
   /* تجميع البنود حسب التاريخ */
   const byDate={};
+  const adm=isAdmin(), vOf=new Map();
   list.forEach(v=>(v.rows||[]).forEach(r=>{
     const d=v.date||'';
     (byDate[d]=byDate[d]||{day:r.day||dayNameOf(d),rows:[]}).rows.push(r);
+    vOf.set(r,v);
   }));
   const dates=Object.keys(byDate).sort();
   const total=list.reduce((a,v)=>a+(+v.total||0),0);
@@ -3357,7 +3742,10 @@ function sectionTable(list,title,cls){
       out+=`<tr class="dayRow ${dayCls}">`;
       if(i===0) out+=`<td class="dayCell ${dayCls}" rowspan="${g.rows.length}">
           <b>${esc(g.day||'—')}</b><div class="dDate">${esc(d)}</div></td>`;
-      out+=`<td class="name">${esc(r.item)}</td>
+      const rv=vOf.get(r), fl=adm&&rv?rowFlags(rv,r.id):[];
+      out+=`<td class="name">${esc(r.item)}${adm&&rv?`<button class="flagBtn mini noprint${fl.length?' on':''}"
+          title="${fl.length?esc(fl.map(f=>f.text).join(' • ')):'ملاحظة على هذا البند'}"
+          onclick="addFlag(${jsArg(rv.id)},${jsArg(r.id)})">${FLAG_SVG}${fl.length?`<span>${fl.length}</span>`:''}</button>`:''}</td>
         <td>${esc(r.weight??'')}</td><td>${esc(r.unit||'—')}</td>
         <td><b>${esc(r.qty??'')}</b></td><td>${fx(r.price)}</td>
         <td class="amt">${fx(r.total)}</td></tr>`;
@@ -3386,7 +3774,7 @@ function drawRep(){
       <div class="custHead">
         <h2>كشف ${esc(c)}</h2>
         <div class="custMeta">${fRep.from} ← ${fRep.to} · ${sub.length} سند</div>
-        ${isAdmin()?`<button class="btn sm noprint waBtn" onclick="shareStatement(this.closest('.cust').dataset.cust,this)">📤 واتساب PDF</button>`:''}
+        ${isAdmin()?`<button class="btn sm noprint waBtn" onclick="shareStatement(this.closest('.cust').dataset.cust,this)">${WA_SVG}<span>إرسال واتساب</span></button>`:''}
       </div>
       <div class="tw"><table class="sheet">
         <tbody>
@@ -3506,12 +3894,25 @@ async function elToPdf(el){
   });
   return pdf.output('blob');
 }
+const WA_SVG='<svg class="waIco" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .1-1.2c0-.1-.2-.2-.5-.3z"/></svg>';
+/* رقم واتساب الزبون من الإعدادات بصيغة دولية (962…) */
+function custWa(c){
+  const raw=String((settings.customers.find(x=>x.name===c)||{}).wa||'').replace(/[^\d]/g,'');
+  if(!raw) return '';
+  if(raw.startsWith('00')) return raw.slice(2);
+  if(raw.startsWith('07')) return '962'+raw.slice(1);
+  return raw;
+}
 async function shareStatement(c,btn){
   if(!isAdmin()) return;
   const card=[...document.querySelectorAll('#repBox .card.cust')].find(el=>el.dataset.cust===c);
   if(!card) return;
-  const old=btn?btn.textContent:'';
-  if(btn){ btn.disabled=true; btn.textContent='⏳ بجهّز الـ PDF…'; }
+  const old=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.textContent='بجهّز الـ PDF…'; }
+  /* على الكمبيوتر: بنفتح نافذة واتساب فورًا (مع الضغطة) عشان المتصفح ما يحجبها */
+  const phone=custWa(c);
+  const canFileShare=!!(navigator.canShare&&window.File&&navigator.canShare({files:[new File(['x'],'t.pdf',{type:'application/pdf'})]}));
+  const waWin=(!canFileShare&&phone)?window.open('about:blank','_blank'):null;
   const wrap=document.createElement('div');
   wrap.className='pdfMode'; wrap.dir='rtl';
   wrap.innerHTML=`<div class="statementHeader"><img class="reportLogo" src="${BADGE}" alt="ALMEFLEH">
@@ -3544,14 +3945,18 @@ async function shareStatement(c,btn){
       a.href=URL.createObjectURL(blob); a.download=name;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-      notify('⬇️ نزل الـ PDF — أرفقه بجروب الزبون على واتساب','ok',6000);
+      if(waWin){
+        waWin.location.href='https://wa.me/'+phone+'?text='+encodeURIComponent(text);
+        notify('نزل الـ PDF وانفتحت محادثة '+c+' — اسحب الملف للمحادثة وابعته','ok',8000);
+      }else notify('نزل الـ PDF — أرفقه بمحادثة الزبون على واتساب'+(phone?'':' (ضيف رقمه بالإعدادات عشان تنفتح المحادثة تلقائيًا)'),'ok',8000);
     }
     logAction('إرسال كشف',null,`${c} — ${fRep.from} ← ${fRep.to}`);
   }catch(e){
-    if(!(e&&e.name==='AbortError')) say('تعذّر تجهيز الـ PDF',esc(String(e&&e.message||e))+'<br><br>جرّب «🖨️ طباعة / PDF» كبديل.');
+    if(waWin) try{ waWin.close(); }catch(_){}
+    if(!(e&&e.name==='AbortError')) say('تعذّر تجهيز الـ PDF',esc(String(e&&e.message||e))+'<br><br>جرّب «طباعة / PDF» كبديل.');
   }finally{
     hold.remove();
-    if(btn){ btn.disabled=false; btn.textContent=old; }
+    if(btn){ btn.disabled=false; btn.innerHTML=old; }
   }
 }
 
@@ -3795,11 +4200,12 @@ function vSettings(){
 
   <div class="card">
     <h2>الزباين</h2>
-    <p class="hint">الرمز بيستخدم لترقيم السندات تلقائيًا (مثال: ISL-O-0001).</p>
-    <div class="tw"><table><thead><tr><th>#</th><th>الاسم</th><th>الرمز</th><th></th></tr></thead>
+    <p class="hint">الرمز بيستخدم لترقيم السندات تلقائيًا (مثال: ISL-O-0001). رقم الواتساب بيخلي زر «إرسال واتساب» بالكشف يفتح محادثة الزبون مباشرة.</p>
+    <div class="tw"><table><thead><tr><th>#</th><th>الاسم</th><th>الرمز</th><th>رقم واتساب</th><th></th></tr></thead>
     <tbody>${settings.customers.map((c,i)=>`<tr><td>${i+1}</td>
       <td class="name"><input value="${esc(c.name)}" onchange="updCust(${i},'name',this.value)"></td>
       <td><input value="${esc(c.code)}" style="width:100px" onchange="updCust(${i},'code',this.value)"></td>
+      <td><input value="${esc(c.wa||'')}" dir="ltr" inputmode="tel" placeholder="07XXXXXXXX" style="width:150px" onchange="updCust(${i},'wa',this.value)"></td>
       <td><button class="btn danger sm" onclick="delCust(${i})">حذف</button></td></tr>`).join('')}</tbody></table></div>
     <div class="grid g3" style="margin-top:12px">
       <div><label>اسم زبون جديد</label><input id="ncName"></div>
