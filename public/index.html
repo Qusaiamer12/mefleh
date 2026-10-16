@@ -720,7 +720,12 @@ tr.fDone td{opacity:.6}
 
 /* ---------- طبقة اللون (بتكسر الأبيض) ---------- */
 :root{--bg:#edf2ef;--gold:#c9a54a}
-nav.tabs{background:linear-gradient(180deg,#0f3d2a 0%,#0b2e1f 100%);color:#cfe3d8;border-left:0}
+nav.tabs{background:linear-gradient(180deg,#0f3d2a 0%,#0b2e1f 100%);color:#cfe3d8;border-left:0;
+  scrollbar-width:none;-ms-overflow-style:none}
+nav.tabs::-webkit-scrollbar{display:none;width:0;height:0}
+nav.tabs button{min-height:38px;padding:7px 10px}
+nav.tabs .navTitle{padding:10px 10px 3px}
+.navBrand{padding-bottom:12px}
 .navBrand{border-bottom-color:rgba(255,255,255,.1)}
 .navBrand b{color:#fff}.navBrand span{color:#9fc2b0}
 .navBrand img{box-shadow:0 0 0 2px rgba(201,165,74,.55)}
