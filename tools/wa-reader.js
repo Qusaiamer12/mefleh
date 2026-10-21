@@ -9,7 +9,9 @@
    الاستخدام:
      node tools/wa-reader.js parse <chat.txt|chat.zip> --customer اسلام
           [--from 2026-09-08] [--to 2026-09-25] [--backup backup.json]
-          [--mdy|--dmy] [--out imports/out] [--photos photos.txt]
+          [--mdy|--dmy] [--out imports/out] [--photos photos.txt] [--no-memory]
+       --backup بيشغّل كمان «ذاكرة المراجعات»: التصحيحات اللي عملتها على
+       استيرادات قبل بتنطبق لحالها (📚 بالملاحظات وبـ review.md)
        → import.json  (لزر «استيراد سندات جاهزة» بالإعدادات)
        → review.md    (البنود المشكوك فيها + الصور اللي لازم تنقرا)
        → media/       (صور الفواتير إذا التصدير «مع الوسائط»)
@@ -159,16 +161,19 @@ function nameRules(s, photo) {
 }
 /* قواعد خاصة بكل زبون — من كشوفاته اللي راجعها */
 const CUSTOMER_RULES = {
-  'عمار': [
-    /* «زيتون مشوي مصري ٨ك» و«مشوي مصري سطل ١٠ ١٠ك» = اثينا مشوي 8ك */
+  /* «زيتون مشوي مصري ٨ك» و«مشوي مصري سطل ١٠ ١٠ك» = اثينا مشوي 8ك
+     (عمار من أول، وبلال كمان بأسبوع 10/10 — صارت لكل الزباين) */
+  '*': [
     [/(\d+)\s*(?:زيتون|زتون)\s*مشوي\s+مصري\s+(?:8|10)\s*ك/g, '$1 اثينا مشوي 8ك'],
     [/(?:(?:زيتون|زتون)\s*)?مشوي\s+مصري(?:\s+سطل)?\s+(\d+)\s+(?:8|10)\s*ك/g, 'اثينا مشوي $1 8ك'],
   ],
 };
+/* زباين بنسجّلهم إخراج بس (الإدخال بيسجلوه هم) */
+const OUT_ONLY = new Set(['بلال']);
 let CUR_CUSTOMER = '';
 function prepLine(line) {
   let s = line.trim();
-  for (const [re, to] of CUSTOMER_RULES[CUR_CUSTOMER] || []) s = s.replace(re, to);
+  for (const [re, to] of (CUSTOMER_RULES[CUR_CUSTOMER] || []).concat(CUSTOMER_RULES['*'])) s = s.replace(re, to);
   let price = null, priceNote = '', bonus = false;
   s = s.replace(/^\[Forwarded\]\s*/i, '').replace(/^[+＋]\s*/, '');
   /* أخطاء كتابة متكررة: «مشرخ» «مع حزر» «مشرح الفلح» «مكسكي» ، ونقطة بعد كلمة أو رقم */
@@ -177,6 +182,9 @@ function prepLine(line) {
        .replace(/([؀-ۿ\d])\.(?=\s|$)/g, '$1').replace(/(?:^|\s)(?:بل\s*مي|بالمي|بالمية)(?=\s|$)/g, ' ');
   /* «مشرح المفلح كرتون ١ ١٠ك» = كرتونة مفلح مشرح 9.36ك */
   s = s.replace(/(?:^|\s)(?:مشرح\s+المفلح|مفلح\s+مشرح)(.*?)(^|\s|\d)10(?:ك|كيلو)(?=\s|$)/, (m, mid, b) => ` مفلح مشرح${mid}${b}9.36ك`);
+  /* «مقدوس تواصي … ٤ك» = مكدوس سوبر 4ك؛ تواصي بحجم 1ك/2ك/500غ = مكدوس عادي (من كل تسجيلاتك من تموز) */
+  if (/تواصي/.test(s) && /(?:^|\s|[^\d.])4\s*(?:ك|كيلو|كغ)(?![؀-ۿ])/.test(s))
+    s = s.replace(/(?:مقدوس|مكدوس)(\s+سوبر)?/, 'مكدوس سوبر').replace(/تواصي/, ' ');
   s = nameRules(s).replace(/(\d+)\s*(?:كراتين|كرتونات)(?=\s|$)/g, ' $1 ');   /* «5كراتين» = العدد */
   /* «جاطات ٤١ فارغ» = جاط فارغ 41 */
   s = s.replace(/(?:^|\s)(سطل|سطول|جاط|جاطات)\s+(\d+)\s+فارغ(?=\s|$)/, (m, c, n) => ` ${/^سط/.test(c) ? 'سطل' : 'جاط'} فارغ ${n}`);
@@ -452,6 +460,120 @@ function mergePhotos(app, vouchers, images, text) {
   return log;
 }
 
+/* «سطل 10ك» لصنف ما إله إلا 8ك بالقائمة (زهرة، شيري مفرغ، دوالي…) = 8ك — زي ما بتصلحها بالمراجعة */
+function bucket8(app, vouchers) {
+  const log = [];
+  for (const v of vouchers) for (const r of v.rows) {
+    if (wkey(r.weight) !== '10' || !/ما في «/.test(r.notes || '')) continue;
+    const bk = app.call('itemSize', r.item).base;
+    const fam = app.run('items').filter(it => app.call('itemSize', it).base === bk);
+    const m8 = fam.find(it => +app.call('itemSize', it).size === 8);
+    if (!m8 || fam.some(it => +app.call('itemSize', it).size === 10)) continue;
+    Object.assign(r, { item: m8.name, weight: 8, unit: m8.unit || 'ك' });
+    r.notes = String(r.notes).split(' • ').filter(x => !/ما في «/.test(x)).concat('سطل 10ك = 8ك (ما في غيره بالقائمة)').join(' • ');
+    log.push(`${v.date} ${v.voucher}: «${r.original}» → ${m8.name} 8ك`);
+  }
+  return log;
+}
+/* ---------- ذاكرة من مراجعاتك ----------
+   كل بند مستورد من واتساب وانت راجعته: منقرأ نصّه الأصلي من جديد ومنقارن مع اللي اعتمدته.
+   لو نفس النص (بنفس الحجم) غيّرته لصنف/حجم ثاني أكثر ما خليته — المرة الجاية بيتغيّر لحاله
+   وعليه ملاحظة 📚. المراجعات الأحدث وزنها أكبر (كل أسبوع أقدم = نص الوزن).
+   قراءة بس من النسخة الاحتياطية — ما بنغيّر شي فيها. */
+const wkey = w => (w === '' || w === null || w === undefined || isNaN(+w) ? '' : String(+w));
+function memKey(app, line, weight) {
+  const name = app.call('key', String(line || '').replace(new RegExp('\\d+(?:\\.\\d+)?(?:' + UNIT_TOK + ')?', 'g'), ' '));
+  /* حجم مكتوب بالسطر ولا مفهوم من السياق («كلهم 1.2 كيلو») — ما بنخلطهم */
+  return name ? name + '@' + wkey(weight) + (hasSize(line) ? '' : '?') : '';
+}
+function learnMemory(app, backup, opt) {
+  const inv = (backup && (backup.invoices || (backup.data && backup.data.wh_invoices_v1))) || [];
+  const mem = new Map(); let n = 0;
+  const saved = CUR_CUSTOMER;
+  for (const v of inv) {
+    /* بس اللي راجعته، وقبل الفترة اللي عم نقرأها */
+    const until = opt['learn-before'] || opt.from;
+    /* كل سند فيه نص أصلي وانت معتمده (واتساب، أو «اقرأ الرسايل» بالنظام) */
+    if (v.review === true || (until && v.date >= until)) continue;
+    CUR_CUSTOMER = v.customer;
+    for (const r of v.rows || []) {
+      const orig = String(r.original || '');
+      if (!orig || orig.includes(' + ') || orig.startsWith('[AI]') || !r.item) continue;
+      const p = prepLine(orig);
+      const r0 = app.call('parseLine', p.line, { day: '', voucher: v.voucher, date: v.date, cancelLast: false });
+      if (!r0 || !r0.item) continue;
+      const k = memKey(app, p.line, r0.weight);
+      if (!k) continue;
+      const same = app.call('key', r0.item) === app.call('key', r.item) && wkey(r0.weight) === wkey(r.weight);
+      const q0 = r0.qty === '' || r0.qty === null || r0.qty === undefined ? 1 : +r0.qty;
+      const kilos = q0 > 0 && +r0.weight > 0 && +r.qty > 0 && +r.weight > 0
+        && Math.abs(q0 * r0.weight - r.qty * r.weight) < 1e-6;
+      if (!mem.has(k)) mem.set(k, []);
+      mem.get(k).push({ cust: v.customer, date: v.date, kilos, ratio: q0 > 0 && +r.qty > 0 ? +r.qty / q0 : 0, item: r.item, weight: r.weight, unit: r.unit || '',
+        dec: same ? 'keep' : app.call('key', r.item) + '@' + wkey(r.weight) + (r.unit || '') });
+      n++;
+    }
+  }
+  CUR_CUSTOMER = saved;
+  return { mem, n };
+}
+/* قرار الزبون نفسه أولًا؛ إذا ما إله تاريخ مع هالنص — قرار باقي الزباين */
+function memDecide(list, customer) {
+  const own = list.filter(e => e.cust === customer);
+  const ev = own.length ? own : list;
+  const last = ev.reduce((m, e) => (e.date > m ? e.date : m), '');
+  const sc = new Map();
+  for (const e of ev) {
+    const w = Math.pow(0.5, (Date.parse(last) - Date.parse(e.date)) / 864e5 / 7);
+    const s = sc.get(e.dec) || { w: 0, n: 0, e: [] };
+    s.w += w; s.n++; s.e.push(e); sc.set(e.dec, s);
+  }
+  const best = [...sc.entries()].sort((a, b) => b[1].w - a[1].w)[0];
+  const keep = sc.get('keep');
+  if (!best || best[0] === 'keep' || (keep && keep.w >= best[1].w)) return null;
+  best[1].e.sort((a, b) => a.date.localeCompare(b.date));
+  return Object.assign(best[1], { own: own.length > 0, keepN: keep ? keep.n : 0 });
+}
+function applyMemory(app, vouchers, mem, opt) {
+  const log = [];
+  CUR_CUSTOMER = opt.customer || '';
+  for (const v of vouchers) for (const r of v.rows) {
+    if (!r.original || !r.item) continue;
+    const k = memKey(app, prepLine(r.original).line, r.weight);
+    const d = k && mem.has(k) ? memDecide(mem.get(k), opt.customer) : null;
+    if (!d) continue;
+    const f = d.e[d.e.length - 1];
+    /* دليل قوي = تكرر عند نفس الزبون، أو 3 مرات وأكثر، أو مرة وحدة عنده بآخر مراجعة (≤10 أيام) بلا عكسها.
+       غير هيك: اقتراح بالملاحظة بس — ما بنغيّر البند */
+    const age = (Date.parse(opt.from || f.date) - Date.parse(f.date)) / 864e5;
+    const strong = (d.own && d.n >= 2) || d.n >= 3 || (d.own && d.n === 1 && !d.keepN && age <= 10);
+    if (!strong) {
+      const tip = `💡 قبل صارت «${f.item} ${wkey(f.weight)}${f.unit}» (${d.n}× ${d.own ? '' : 'عند زبون ثاني '}آخرها ${f.date}) — شوف إذا نفس الشي`;
+      r.notes = (r.notes ? r.notes + ' • ' : '') + tip;
+      log.push(`💡 ${v.date} ${v.voucher}: «${r.original}» — اقتراح ${f.item} ${wkey(f.weight)}${f.unit} (${d.n}×${d.own ? '' : ' زبون ثاني'})`);
+      continue;
+    }
+    let qty = r.qty, qtyWarn = false;
+    /* «نبالي 1 10ك» → «نبالي 2 5ك»: إذا دايمًا حافظت على الكيلوات، منحسب العدد من جديد */
+    const q0 = r.qty === '' || r.qty === null || r.qty === undefined ? 1 : +r.qty;
+    if (wkey(f.weight) !== wkey(r.weight) && d.e.every(e => e.kilos) && q0 > 0 && +r.weight > 0 && +f.weight > 0)
+      qty = +((q0 * +r.weight) / +f.weight).toFixed(3);
+    /* «مكدوس 12 1ك» → «مكدوس 1ك كرتونه × 1»: نفس النسبة بالعدد كل مرة */
+    else if (d.e.every(e => e.ratio && Math.abs(e.ratio - d.e[0].ratio) < 1e-9) && d.e[0].ratio !== 1 && q0 > 0)
+      qty = +(q0 * d.e[0].ratio).toFixed(3);
+    if (qty !== r.qty && Math.abs(qty - Math.round(qty)) > 1e-6) qtyWarn = true;
+    const was = `${r.item} ${wkey(r.weight)}${r.unit || ''} × ${r.qty}`;
+    Object.assign(r, { item: f.item, weight: f.weight, unit: f.unit, qty });
+    if (!r.priceFromMsg) r.price = '';
+    const keepNotes = String(r.notes || '').split(' • ').filter(x => x && !/صنف غير موجود|ما في «|حدّد الحجم|اعتمدت الحجم|وحّدته مع|فهمته من/.test(x));
+    keepNotes.push(`📚 من مراجعتك: كان «${was}» (${d.n}× ${d.own ? '' : 'عند زبون ثاني '}آخرها ${f.date})`
+      + (d.n === 1 ? ' — ⚠️ مرة وحدة، تأكد' : '') + (qtyWarn ? ' — ⚠️ العدد طلع كسر، تأكد' : ''));
+    r.notes = keepNotes.join(' • ');
+    log.push(`📚 ${v.date} ${v.voucher}: «${r.original}» → ${f.item} ${wkey(f.weight)}${f.unit} × ${qty} (${d.n}×${d.keepN ? ` مقابل ${d.keepN} خليته` : ''})`);
+  }
+  return log;
+}
+
 /* ---------- المخرجات ---------- */
 function custCode(app, name) {
   const c = (app.run('settings').customers || []).find(x => x.name === name);
@@ -491,7 +613,7 @@ function reviewMd(imp, log, extra) {
     L.push(`## ${v.date} — ${v.voucher} (${v.rows.length} بند)`, '',
       '| الصنف | الوزن | العدد | سعر الرسالة | ملاحظة | السطر الأصلي | الرسالة |', '|---|---|---|---|---|---|---|');
     for (const r of v.rows) {
-      const flag = /⚠️|ناقص/.test(r.notes) ? '⚠️ ' : '';
+      const flag = /⚠️|ناقص|💡/.test(r.notes) ? '⚠️ ' : '';
       L.push(`| ${flag}${r.item} | ${fx(r.weight)}${r.unit} | ${fx(r.qty)} | ${r.priceFromMsg ? fx(r.price) : ''} | ${r.notes.replace(/\|/g, '/')} | ${r.original.replace(/\|/g, '/')} | ${r.msg.replace(/\|/g, '/')} |`);
     }
     L.push('');
@@ -504,6 +626,11 @@ function reviewMd(imp, log, extra) {
   if (log.removed.length || log.merged.length) {
     L.push('## تصحيحات تلقائية', '');
     log.removed.concat(log.merged).forEach(s => L.push('- ' + s));
+    L.push('');
+  }
+  if (log.learned && log.learned.length) {
+    L.push('## 📚 من ذاكرة مراجعاتك', '');
+    log.learned.forEach(s => L.push('- ' + s));
     L.push('');
   }
   if (log.images.length) {
@@ -552,6 +679,7 @@ function args(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--mdy' || a === '--dmy') o.order = a.slice(2);
+    else if (a === '--no-memory') o['no-memory'] = true;
     else if (a.startsWith('--')) o[a.slice(2)] = argv[++i];
     else o._.push(a);
   }
@@ -560,7 +688,10 @@ function args(argv) {
 function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   const o = args(rest);
-  const backup = o.backup ? JSON.parse(fs.readFileSync(o.backup, 'utf8')) : null;
+  let backup = o.backup ? JSON.parse(fs.readFileSync(o.backup, 'utf8')) : null;
+  /* نسخة مسحوبة من فايربيس ({data:{wh_items_v1,…}}) = نفس النسخة الاحتياطية */
+  if (backup && backup.data && !backup.items) backup = { items: backup.data.wh_items_v1,
+    settings: backup.data.wh_settings_v1, invoices: backup.data.wh_invoices_v1 };
   const app = loadApp(backup);
   if (cmd === 'parse') {
     if (!o._[0] || !o.customer) throw new Error('الاستخدام: parse <chat> --customer <اسم الزبون>');
@@ -573,10 +704,22 @@ function main() {
       const plog = mergePhotos(app, vouchers, log.images, fs.readFileSync(o.photos, 'utf8'));
       plog.forEach(t => log.skipped.push({ date: '', time: '', text: t, why: 'ملف الصور' }));
     }
+    log.removed.push(...bucket8(app, vouchers));
+    if (OUT_ONLY.has(o.customer)) {
+      const drop = vouchers.filter(v => v.voucher === 'إدخال');
+      drop.forEach(v => log.removed.push(`${v.date}: تخطيت إدخال ${o.customer} (${v.rows.length} بند) — منسجّله إخراج بس`));
+      vouchers.splice(0, vouchers.length, ...vouchers.filter(v => v.voucher !== 'إدخال'));
+    }
+    if (backup && !o['no-memory']) {
+      const { mem, n } = learnMemory(app, backup, o);
+      log.learned = applyMemory(app, vouchers, mem, o);
+      log.memN = n;
+    }
     const imp = toImport(app, vouchers, o);
     fs.writeFileSync(path.join(out, 'import.json'), JSON.stringify(imp, null, 1));
     fs.writeFileSync(path.join(out, 'review.md'), reviewMd(imp, log, { order, media }));
     const n = imp.vouchers.reduce((a, v) => a + v.rows.length, 0);
+    if (log.learned) console.log(`📚 الذاكرة: ${log.memN} بند راجعته قبل · طبّقت ${log.learned.filter(x => x.startsWith('📚')).length} تصحيح · ${log.learned.filter(x => x.startsWith('💡')).length} اقتراح`);
     console.log(`✅ ${msgs.length} رسالة → ${imp.vouchers.length} سند / ${n} بند · صور: ${log.images.length} · ما انقرى: ${log.skipped.length}`);
     console.log('   ' + path.join(out, 'import.json') + '\n   ' + path.join(out, 'review.md'));
   } else if (cmd === 'compare') {
@@ -597,4 +740,4 @@ function main() {
 if (require.main === module) {
   try { main(); } catch (e) { console.error('❌ ' + (e && e.message || e)); process.exit(1); }
 }
-module.exports = { loadApp, normChat, splitMessages, chatToVouchers, mergePhotos, prepLine, toImport, compare };
+module.exports = { loadApp, normChat, splitMessages, chatToVouchers, mergePhotos, prepLine, toImport, compare, learnMemory, applyMemory };
