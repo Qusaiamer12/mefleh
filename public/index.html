@@ -4899,7 +4899,7 @@ const FB_CHUNK = 200000;            /* حرف/مستند — سقف فايرست
 const FB_COL   = 'wh_sync';         /* اسم المجموعة بفايرستور */
 const RETRY_MS = 15000, RETRY_MAX = 8;
 
-const FB = { ready:false, db:null, col:null, uiT:null, tries:0,
+const FB = { ready:false, db:null, col:null, uiT:null, tries:0, retry:{},
              last:{}, nChunks:{}, cache:{}, timers:{},
              outbox:new Set(),           /* مفاتيح محفوظة محليًا قبل ما نجهز */
              pending:new Set(),          /* حفظات بتستنى مهلة الدفع (900ms) */
@@ -5081,10 +5081,14 @@ function fbPush(k){
   FB.pending.add(k);
   FB.timers[k]=setTimeout(()=>{
     FB.pending.delete(k);
-    fbPushNow(k).catch(e=>{
+    fbPushNow(k).then(()=>{ FB.retry[k]=0; }).catch(e=>{
       console.warn('fb push',k,e);
       delete FB.last[k];                          /* خلينا المحاولة الجاية تعيد */
       fbBadge('☁️ تعذّر الرفع — شغال محلي','off','آخر فشل: '+String(e&&e.message||e));
+      /* حفظ من جهازين بنفس اللحظة: الـ transaction ممكن يفشل بعد محاولاته — كان الحفظ يضيع لحد
+         التعديل الجاي. هلأ بنعيد المحاولة لحالنا (2ث، 4ث، 8ث…) لحد 6 مرات */
+      const n=FB.retry[k]=(FB.retry[k]||0)+1;
+      if(n<=6) setTimeout(()=>fbPush(k),2000*Math.pow(2,n-1)); else FB.outbox.add(k);
     });
   },900);
 }
