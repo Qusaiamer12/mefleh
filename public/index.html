@@ -5089,11 +5089,23 @@ function fbPush(k){
   },900);
 }
 
+/* تقسيم JSON لقطع بدون ما نقسم حرف إيموجي (زوج UTF-16) بين قطعتين —
+   القطع المقسوم بيتخزن «��» بفايرستور وبيخرب النص لما ينجمع */
+function fbSplit(json){
+  const parts=[];
+  for(let i=0;i<json.length;){
+    let e=Math.min(i+FB_CHUNK,json.length);
+    if(e<json.length){ const c=json.charCodeAt(e-1); if(c>=0xD800&&c<=0xDBFF) e--; }
+    parts.push(json.slice(i,e)); i=e;
+  }
+  return parts.length?parts:[''];
+}
 /* كتابة قطع JSON للسحابة داخل batch جاهز (أو ضمن transaction) */
-function fbChunkWrites(writeFn,base,json,n,oldN){
+function fbChunkWrites(writeFn,base,json,parts,oldN){
+  const n=parts.length;
   writeFn('set',base+'_m',{chunks:n,len:json.length,t:Date.now()});
   for(let i=0;i<n;i++)
-    writeFn('set',base+'_'+i,{i,d:json.slice(i*FB_CHUNK,(i+1)*FB_CHUNK)});
+    writeFn('set',base+'_'+i,{i,d:parts[i]});
   for(let i=n;i<oldN;i++) writeFn('del',base+'_'+i);
 }
 
@@ -5120,10 +5132,10 @@ async function fbPushNow(k){
       const local=Array.isArray(raw)?raw:[];
       const merged=fbMerge(local,remote,tom,k);
       const json=JSON.stringify(merged);
-      const n=Math.max(1,Math.ceil(json.length/FB_CHUNK));
+      const parts=fbSplit(json), n=parts.length;
       const oldN=(msnap&&msnap.exists&&msnap.data().chunks)||FB.nChunks[k]||0;
       fbChunkWrites((op,id,data)=>{ op==='set'?t.set(FB.col.doc(id),data):t.delete(FB.col.doc(id)); },
-        k,json,n,oldN);
+        k,json,parts,oldN);
       /* فايربيس ممكن يعيد هالدالة أكثر من مرة — ما منلمس الحالة هون */
       res={local,merged,json,n};
     });
@@ -5150,11 +5162,11 @@ async function fbPushNow(k){
   /* === الباقي: استبدال كامل (إعدادات/أصناف/سجل) — آخر كاتب يكسب === */
   const json=JSON.stringify(k===LS.set ? fbScrubSet(raw) : (raw ?? null));
   if(FB.last[k]===json) return;
-  const n=Math.max(1,Math.ceil(json.length/FB_CHUNK));
+  const parts=fbSplit(json), n=parts.length;
   const oldN=FB.nChunks[k]||0;
   await FB.db.runTransaction(async t=>{
     fbChunkWrites((op,id,data)=>{ op==='set'?t.set(FB.col.doc(id),data):t.delete(FB.col.doc(id)); },
-      k,json,n,oldN);
+      k,json,parts,oldN);
   });
   FB.last[k]=json; FB.nChunks[k]=n;
   fbBadge('☁️ متصل','on','المزامنة السحابية شغالة');
