@@ -703,6 +703,11 @@ function main() {
     if (o.photos) {
       const plog = mergePhotos(app, vouchers, log.images, fs.readFileSync(o.photos, 'utf8'));
       plog.forEach(t => log.skipped.push({ date: '', time: '', text: t, why: 'ملف الصور' }));
+      /* صورة أو PDF بالفترة ما إله «# رقم» بملف الصور = انسقط من التفريغ (صار مع PDF «مكة» 05/11) */
+      const refs = new Set((fs.readFileSync(o.photos, 'utf8').match(/^#\s*(\S+)/gm) || []).map(h => h.replace(/^#\s*/, '').slice(0, 8)));
+      const missed = log.images.filter(i => i.file && /\.(jpe?g|png|webp|heic|pdf)$/i.test(i.file) && !/STICKER/i.test(i.file) && !refs.has(i.file.slice(0, 8)));
+      missed.forEach(i => log.skipped.push({ date: i.date, time: i.time, text: i.file + (i.caption ? ' — ' + i.caption : ''), why: 'صورة/PDF مش مفرّغة بملف الصور' }));
+      if (missed.length) console.log(`⚠️ ${missed.length} صورة/PDF بالفترة مش مفرّغة بملف الصور: ` + missed.map(i => i.file.slice(0, 8) + (/\.pdf$/i.test(i.file) ? ' (PDF)' : '')).join('، '));
     }
     log.removed.push(...bucket8(app, vouchers));
     if (OUT_ONLY.has(o.customer)) {
