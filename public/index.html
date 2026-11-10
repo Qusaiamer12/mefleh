@@ -3418,10 +3418,13 @@ function drawConsumption(){
   L.forEach(v=>{
     v.rows.forEach(r=>{
       if(q && !key(r.item).includes(q)) return;
-      if(!map[r.item]) map[r.item]={out:0, inn:0};
+      /* كل حجم لحاله (جرجير 10ك غير جرجير 5ك) — زي ما بيقول عنوان العمود */
+      const w=r.weight==null||r.weight===''?'':String(r.weight).trim();
+      const label=String(r.item||'').trim()+(w?' '+w+(r.unit&&r.unit!=='—'?r.unit:''):'');
+      if(!map[label]) map[label]={out:0, inn:0};
       const val = parseFloat(r.qty)||0;
-      if(v.voucher==='إخراج') map[r.item].out+=val;
-      else if(v.voucher==='إدخال') map[r.item].inn+=val;
+      if(v.voucher==='إخراج') map[label].out+=val;
+      else if(v.voucher==='إدخال') map[label].inn+=val;
     });
   });
 
@@ -3432,11 +3435,13 @@ function drawConsumption(){
   <div class="card">
     <div class="tw"><table>
     <thead><tr><th>الصنف (مع الوزن)</th><th>إخراج (مبيعات)</th><th>إدخال (مرتجعات)</th><th>الصافي (الاستهلاك)</th></tr></thead>
-    <tbody>${arr.length?arr.map(x=>`<tr>
+    <tbody>${arr.length>1?`<tr class="totRow"><td><b>المجموع (كل الأحجام)</b></td><td class="vOut"><b>${+arr.reduce((a,x)=>a+x.out,0).toFixed(3)}</b></td>
+      <td class="vIn"><b>${+arr.reduce((a,x)=>a+x.inn,0).toFixed(3)}</b></td><td><b>${+arr.reduce((a,x)=>a+x.net,0).toFixed(3)}</b></td></tr>`:''}
+    ${arr.length?arr.map(x=>`<tr>
       <td><b>${esc(x.item)}</b></td>
-      <td class="vOut">${x.out}</td>
-      <td class="vIn">${x.inn}</td>
-      <td><b>${x.net}</b></td>
+      <td class="vOut">${+x.out.toFixed(3)}</td>
+      <td class="vIn">${+x.inn.toFixed(3)}</td>
+      <td><b>${+x.net.toFixed(3)}</b></td>
       </tr>`).join(''):'<tr><td colspan="4">لا يوجد حركة أصناف مطابقة</td></tr>'}</tbody>
     </table></div>
   </div>`;
