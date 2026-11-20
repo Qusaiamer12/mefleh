@@ -669,6 +669,9 @@ table.sheet td,table.sheet th{border-color:#d9dfdc}
 .note{background:#fffaf0;border:1px solid #f3e1b5;border-radius:10px;color:#5c4510}
 .okbox{background:#f0f8f3;border:1px solid #cfe6d8;border-radius:10px}
 .revTag{background:var(--amb-s);color:var(--amb);border-color:var(--amb-l);font-weight:600}
+.vNote{display:inline-block;margin-inline-start:6px;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;
+  background:var(--amb-s);color:var(--amb);border:1px solid var(--amb-l);vertical-align:middle}
+@media print{.vNote{background:none;color:#000;border-color:#000}}
 .statementHeader{gap:16px}
 .reportLogo{width:96px;border-width:1px}
 .custHead{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px;align-items:center}
@@ -937,14 +940,13 @@ function norm(s){
 const key = s => norm(s).toLowerCase().replace(/[^\w\u0600-\u06FF]/g,'');
 
 /* ---------- التخزين ----------
-   IndexedDB هو المخزن الأساسي (مساحته بالجيجا)، و localStorage نسخة احتياطية
-   فورية للقراءة السريعة عند الإقلاع. الكتابة بتصير بالاثنين.               */
+   المجموعات الكبيرة بـ IndexedDB (مساحته بالجيجا)، والصغيرة بـ localStorage.  */
 const LS={inv:'wh_invoices_v1',items:'wh_items_v1',set:'wh_settings_v1',
           log:'wh_log_v1',trash:'wh_trash_v1',
           reqs:'wh_reqs_v1',msgs:'wh_msgs_v1',notes:'wh_notes_v1',
           led:'wh_ledger_v1',lcl:'wh_lclients_v1',dead:'wh_dead_v1'};
 
-const IDB={db:null,ok:false};
+const IDB={db:null,ok:false,big:false};
 function idbOpen(){
   return new Promise(res=>{
     try{
@@ -973,9 +975,64 @@ function idbGet(k){
 
 const load=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v??d}catch(e){return d}};
 
+/* المجموعات الكبيرة (السندات، السلة، السجل) بتنحفظ بـ IndexedDB بس —
+   المساحة السريعة (٥ ميغا) بتضل للإعدادات والأشياء الصغيرة.
+   قبل ما يخلص التحميل من IndexedDB ما بنكتب ولا مجموعة كبيرة (بتستنى بالدور). */
+const BIG_KEYS=[LS.inv,LS.trash,LS.log];
+const BIG_PENDING=new Set();
+let IDB_HYD=false;
+function idbPut(k,v){
+  return new Promise(res=>{
+    if(!IDB.ok) return res(false);
+    try{ const tx=IDB.db.transaction('kv','readwrite'); tx.objectStore('kv').put(v,k);
+      tx.oncomplete=()=>res(true); tx.onerror=tx.onabort=()=>res(false);
+    }catch(e){res(false)}
+  });
+}
+function bigSet(k,v){ if(k===LS.inv) invoices=v; else if(k===LS.trash) trash=v; else if(k===LS.log) logs=v; }
+function bigGet(k){ return k===LS.inv?invoices:k===LS.trash?trash:k===LS.log?logs:undefined; }
+const IDB_READY=(async()=>{
+  try{
+    if(!await idbOpen()) return;
+    let all=true;
+    for(const k of BIG_KEYS){
+      let raw=null; try{ raw=localStorage.getItem(k); }catch(e){}
+      if(raw!==null){
+        /* أول مرة: ننقل من المساحة السريعة، ونمسحها منها بس بعد ما نتأكد إنها انحفظت كاملة */
+        let v; try{ v=JSON.parse(raw); }catch(e){ all=false; continue; }
+        if(!Array.isArray(v)){ all=false; continue; }
+        const ok=await idbPut(k,v), back=ok?await idbGet(k):null;
+        if(Array.isArray(back)&&back.length===v.length){ try{ localStorage.removeItem(k); }catch(e){} }
+        else all=false;
+      }else{
+        const v=await idbGet(k);
+        if(Array.isArray(v)) bigSet(k,v);
+      }
+    }
+    IDB.big=all;
+  }catch(e){ IDB.big=false; }
+  finally{
+    IDB_HYD=true;
+    const l=[...BIG_PENDING]; BIG_PENDING.clear();
+    l.forEach(k=>{ try{ save(k,bigGet(k)); }catch(e){} });
+  }
+})();
+
 /* حالة المساحة: بننبّه قبل ما تنحشر مش بعدها */
 let STORE_WARNED=false;
 function save(k,v){
+  if(BIG_KEYS.includes(k)){
+    if(!IDB_HYD){ BIG_PENDING.add(k); markSaved(); return true; }
+    if(IDB.big){
+      idbPut(k,v).then(ok=>{
+        if(ok){ try{ localStorage.removeItem(k); }catch(e){} return; }
+        try{ localStorage.setItem(k,JSON.stringify(v)); }
+        catch(e){ notify('⚠️ تعذّر الحفظ: الذاكرة ممتلئة. نزّل نسخة احتياطية فورًا.','bad',9000); }
+      });
+      markSaved(); checkQuota();
+      return true;
+    }
+  }
   let lsOK=true;
   try{ localStorage.setItem(k,JSON.stringify(v)); }
   catch(e){ lsOK=false; }
@@ -1407,6 +1464,15 @@ function stripHeader(line){
 }
 
 /* البحث عن الصنف بالكتالوج: مطابقة تامة ← مرادف ← احتواء ← تشابه */
+/* تطابق بالحرف بس (اسم/اسم مع الحجم/اسم بديل) — بلا تخمين */
+function exactItem(raw){
+  const k=key(raw); if(!k) return null;
+  for(const it of items){
+    if(key(labelOf(it))===k||key(it.name)===k) return it;
+    if((it.aliases||[]).some(a=>key(a)===k)) return it;
+  }
+  return null;
+}
 function findItem(raw){
   const k=key(raw); if(!k) return null;
   /* 1) تصحيح متعلَّم من تعديلاتك السابقة */
@@ -2343,10 +2409,20 @@ function refreshFlagsUI(invId){
   else if(TAB==='report') drawRep();
   else if(TAB==='invoices' && $('invDetail')){ const keep=window.scrollY; drawInv(); viewInv(invId,true); window.scrollTo(0,keep); }
 }
+/* «فتح السند» من الملاحظات: فلتر مؤقت على السند — بيرجع الفلتر القديم
+   بزر «كل السندات» أو أول ما تطلع من صفحة السندات */
+let fInvSaved=null, fInvFrom='';
 function openFlagInv(invId){
   const v=invoices.find(x=>x.id===invId); if(!v) return;
+  if(!fInvSaved) fInvSaved={...fInv};
+  fInvFrom=TAB;
   fInv={q:'',cust:v.customer,vou:v.voucher,from:v.date,to:v.date,rev:false};
   go('invoices'); viewInv(invId);
+}
+function clearInvFocus(back){
+  if(fInvSaved){ fInv=fInvSaved; fInvSaved=null; }
+  const t=fInvFrom; fInvFrom='';
+  if(back&&t&&t!=='invoices') go(t); else vInvoices();
 }
 let fFlags={st:'open',cust:''};
 function vFlags(){
@@ -2394,6 +2470,7 @@ function vFlags(){
 }
 
 function go(t){
+  if(t!=='invoices'&&fInvSaved){ fInv=fInvSaved; fInvSaved=null; fInvFrom=''; }
   TAB=t; render();
   try{ if(window.innerWidth<=900) setNav(false); }catch(e){}
   try{ window.scrollTo(0,0); }catch(e){}
@@ -2931,6 +3008,8 @@ function vEntry(){
       <div><label>التاريخ</label><input type="date" id="fDate" value="${draft.date}" onchange="draft.date=this.value"></div>
       <div><label>رقم السند (اختياري)</label><input id="fNo" value="${esc(draft.no)}" onchange="draft.no=this.value" placeholder="تلقائي"></div>
     </div>
+    <div style="margin-top:10px"><label>ملاحظة على السند (اختياري — بتطلع جنب السند بالقائمة والكشف)</label>
+      <input id="fNote" value="${esc(draft.note||'')}" onchange="draft.note=this.value" placeholder="مثلًا: طلبية تصدير"></div>
   </div>
 
   <div class="card">
@@ -3241,9 +3320,19 @@ function upd(i,k,v){
   r[k]=v;
   const heavy=(k==='item');          /* تغيير الصنف بيبدّل السعر والوزن والوحدة */
   if(k==='item'){
-    const m=findItem(v);
-    if(m){ applyItem(r,m); }
-    else { r.notes='⚠️ صنف غير موجود بقائمة الأسعار'; }
+    /* الاسم بينحفظ زي ما كتبته بالضبط — ما بنحوّله لأقرب صنف.
+       بس إذا اخترت صنف من القائمة بالحرف، بنعبّي الوزن والوحدة والسعر منه. */
+    v=String(v||'').trim(); r.item=v;
+    const m=exactItem(v);
+    if(m){
+      const keepPrice=draft.id&&r.price!==''&&r.price!=null?r.price:null;
+      applyItem(r,m);
+      if(keepPrice!==null){ const lp=r.price; r.price=keepPrice;
+        r.notes=(lp!==''&&Math.abs(lp-keepPrice)>0.001)?`سعر القائمة ${fx(lp)} — خليت سعر السند`:''; }
+    }
+    else { r.base=v;
+      const rest=String(r.notes||'').split(' • ').filter(x=>x&&!/^⚠️ صنف غير موجود|^⚠️ ما في «|^اسم حر/.test(x));
+      r.notes=rest.join(' • '); }
   }
   if(k==='price'){
     const m=findItem(r.item);
@@ -3340,12 +3429,15 @@ function commitInvoice(d,extra){
   const editing=!!d.id;
   const ix=editing?invoices.findIndex(x=>x.id===d.id):-1;
   const old=ix>=0?invoices[ix]:null;
+  /* ملاحظة السند: اللي بالمسودة، وإذا المسودة ما فيها حقل الملاحظة بتضل القديمة */
+  const vnote=d.note!==undefined?String(d.note||'').trim():String((old&&old.note)||'');
   const inv=Object.assign({ id:d.id||uid(),
     no:d.no||nextNo(d.customer,d.voucher),
     customer:d.customer, voucher:d.voucher, date:d.date,
     rows:JSON.parse(JSON.stringify(d.rows)).map(r=>({...r,day:r.day||dayNameOf(d.date)})),
     total:+total.toFixed(4),
     savedAt:new Date().toISOString() },
+    vnote?{note:vnote}:{},
     /* سند مستورد انعدّل: بيضل مستورد بس إذا ضل لنفس الزبون والتاريخ والنوع —
        لو صار سند ثاني (زبون/تاريخ غير) ما بيضل يحجز مفتاح الاستيراد */
     old&&old.importKey&&old.customer===d.customer&&old.date===d.date&&old.voucher===d.voucher
@@ -3448,7 +3540,13 @@ function drawConsumption(){
 }
 
 function vInvoices(){
+  /* فلتر «بس واتساب» ما بيضل شغّال وهو مخفي (بعد ما تخلص مراجعة آخر سند) */
+  if(fInv.rev&&!invoices.some(v=>v.review)) fInv.rev=false;
   $('view').innerHTML=`
+  ${fInvSaved?`<div class="note noprint row" style="align-items:center;gap:8px">
+    <span>معروض السند اللي فتحته من الملاحظات بس.</span>
+    <button class="btn sm" onclick="clearInvFocus(false)">كل السندات</button>
+    ${fInvFrom&&fInvFrom!=='invoices'?`<button class="btn sec sm" onclick="clearInvFocus(true)">↩ رجوع للملاحظات</button>`:''}</div>`:''}
   <div class="card">
     <h2>بحث بالسندات</h2>
     <div class="grid g4">
@@ -3475,9 +3573,9 @@ function invFiltered(){
     if(fInv.vou&&v.voucher!==fInv.vou)return false;
     if(fInv.from&&v.date<fInv.from)return false;
     if(fInv.to&&v.date>fInv.to)return false;
-    if(fInv.rev&&!v.review)return false;
+    if(fInv.rev&&!v.review&&invoices.some(x=>x.review))return false;
     if(!q)return true;
-    return key(v.no+' '+v.customer+' '+v.rows.map(r=>r.item).join(' ')).includes(q);
+    return key(v.no+' '+v.customer+' '+(v.note||'')+' '+v.rows.map(r=>r.item).join(' ')).includes(q);
   });
 }
 function drawInv(){
@@ -3497,7 +3595,7 @@ function drawInv(){
     <thead><tr><th>رقم السند</th><th>التاريخ</th><th>الزبون</th><th>النوع</th>
       <th>البنود</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
     <tbody>${L.length?L.map(v=>`<tr>
-      <td><b>${esc(v.no)}</b>${v.review&&isAdmin()?' <span class="revTag" title="مستورد من واتساب — بحاجة مراجعة">🟡 واتساب</span>':''}${isAdmin()&&openFlagsOf(v)?` <span class="flagTag" title="ملاحظات مفتوحة">${FLAG_SVG}${openFlagsOf(v)}</span>`:''}</td><td>${esc(v.date)}</td><td>${esc(v.customer)}</td>
+      <td><b>${esc(v.no)}</b>${v.note?` <span class="vNote">${esc(v.note)}</span>`:''}${v.review&&isAdmin()?' <span class="revTag" title="مستورد من واتساب — بحاجة مراجعة">🟡 واتساب</span>':''}${isAdmin()&&openFlagsOf(v)?` <span class="flagTag" title="ملاحظات مفتوحة">${FLAG_SVG}${openFlagsOf(v)}</span>`:''}</td><td>${esc(v.date)}</td><td>${esc(v.customer)}</td>
       <td class="${v.voucher==='إخراج'?'vOut':'vIn'}">${esc(v.voucher)}</td>
       <td>${v.rows.length}</td><td><b>${fx(v.total)}</b></td>
       <td>
@@ -3520,7 +3618,7 @@ function viewInv(id,noScroll){
   $('invDetail').innerHTML=`<div class="card watermark">
     <div class="statementHeader"><img class="reportLogo" src="${BADGE}" alt="ALMEFLEH">
       <h2 style="color:var(--g)">سند ${esc(v.voucher)} — ${esc(v.no)}</h2></div>
-    <p class="hint">${esc(v.customer)} • ${esc(v.date)}</p>
+    <p class="hint">${esc(v.customer)} • ${esc(v.date)}${v.note?` <span class="vNote">${esc(v.note)}</span>`:''}</p>
     ${vFl.length?`<div class="noprint">${flagList(vFl)}</div>`:''}
     <div class="tw"><table><thead><tr><th>#</th><th>اليوم</th><th>الصنف</th><th>الوزن</th>
     <th>الوحدة</th><th>العدد</th><th>سعر العبوة</th><th>الإجمالي</th>${adm?'<th class="noprint">ملاحظة</th>':''}</tr></thead><tbody>
@@ -3553,12 +3651,13 @@ function markReviewed(id){
   const v=invoices.find(x=>x.id===id); if(!v||!isAdmin()) return;
   v.review=false; saveInv();
   logAction('مراجعة',v,'سند مستورد من واتساب — تمت مراجعته');
-  drawInv(); viewInv(id); notify('✔ تمت مراجعة السند '+v.no,'ok');
+  if(fInv.rev&&!invoices.some(x=>x.review)){ fInv.rev=false; vInvoices(); } else drawInv();
+  viewInv(id); notify('✔ تمت مراجعة السند '+v.no,'ok');
 }
 function editInv(id){
   const v=invoices.find(x=>x.id===id); if(!v)return;
   if(!isAdmin() && v.customer !== myCustomer()){ notify('ما إلك صلاحية التعديل','bad'); return; }
-  draft={id:v.id,no:v.no,customer:v.customer,voucher:v.voucher,date:v.date,day:'',
+  draft={id:v.id,no:v.no,customer:v.customer,voucher:v.voucher,date:v.date,day:'',note:v.note||'',
     rows:JSON.parse(JSON.stringify(v.rows)),flags:JSON.parse(JSON.stringify(v.flags||[]))};
   lastSkipped=[]; go('entry'); toast('تعديل السند '+v.no);
 }
@@ -3808,7 +3907,7 @@ function sectionTable(list,title,cls){
   }));
   const dates=Object.keys(byDate).sort();
   const total=list.reduce((a,v)=>a+(+v.total||0),0);
-  const cols=7;
+  const cols=7, noted=new Set();
 
   if(!dates.length){
     return `<tr><th colspan="${cols}" class="secHead ${cls}">${title}</th></tr>
@@ -3832,7 +3931,8 @@ function sectionTable(list,title,cls){
           <b>${esc(g.day||'—')}</b><div class="dDate">${esc(d)}</div></td>`
         :`<td class="dayCell dCont ${dayCls}"></td>`;
       const rv=vOf.get(r), fl=adm&&rv?rowFlags(rv,r.id):[];
-      out+=`<td class="name">${esc(r.item)}${adm&&rv?`<button class="flagBtn mini noprint${fl.length?' on':''}"
+      const vn=rv&&rv.note&&!noted.has(rv.id)?(noted.add(rv.id),` <span class="vNote">${esc(rv.note)}</span>`):'';
+      out+=`<td class="name">${esc(r.item)}${vn}${adm&&rv?`<button class="flagBtn mini noprint${fl.length?' on':''}"
           title="${fl.length?esc(fl.map(f=>f.text).join(' • ')):'ملاحظة على هذا البند'}"
           onclick="addFlag(${jsArg(rv.id)},${jsArg(r.id)})">${FLAG_SVG}${fl.length?`<span>${fl.length}</span>`:''}</button>`:''}</td>
         <td>${esc(r.weight??'')}</td><td>${esc(r.unit||'—')}</td>
@@ -4407,11 +4507,11 @@ function vSettings(){
 
   <div class="card">
     <h2>💽 المساحة</h2>
-    <p class="hint">التخزين الأساسي IndexedDB (مساحته كبيرة)، مع نسخة سريعة بالمتصفح.</p>
+    <p class="hint">${IDB.big?'السندات والسلة والسجل محفوظين بالتخزين الكبير (IndexedDB) — المساحة السريعة بس للإعدادات والأشياء الصغيرة.':'التخزين الكبير مش شغّال بهالمتصفح — كل شي بالمساحة السريعة.'}</p>
     <div class="totals">
       <div class="stat"><span>السندات</span><b>${invoices.length}</b></div>
       <div class="stat"><span>الأصناف</span><b>${items.length}</b></div>
-      <div class="stat"><span>التخزين الكبير</span><b>${IDB.ok?'✅ شغّال':'—'}</b></div>
+      <div class="stat"><span>التخزين الكبير</span><b>${IDB.big?'✅ شغّال':'—'}</b></div>
       <div class="stat"><span>المساحة السريعة</span><b>${quotaPct()}%</b></div>
     </div>
     <div class="bar"><i style="width:${quotaPct()}%"></i></div>
@@ -4593,6 +4693,9 @@ function autoBackup(){
     /* لقطة داخلية دائمًا — بترجع حتى لو المستخدم ما نزّل ملف */
     const snap={date:new Date().toISOString(),count:invoices.length,data:backupPayload()};
     idbSet('autosnap_'+today,snap);
+    /* بنخلي آخر ٧ لقطات بس — كل لقطة بحجم البيانات كلها */
+    try{ if(IDB.ok){ const st=IDB.db.transaction('kv','readwrite').objectStore('kv'), rq=st.getAllKeys();
+      rq.onsuccess=()=>{ (rq.result||[]).filter(x=>/^autosnap_/.test(x)&&x!=='autosnap_'+today).sort().reverse().slice(6).forEach(x=>{ try{ st.delete(x); }catch(e){} }); }; } }catch(e){}
     try{ localStorage.setItem('wh_autosnap',JSON.stringify(
       {date:snap.date,count:snap.count})); }catch(e){}
     saveSet();
@@ -4649,6 +4752,23 @@ function lastUsedPrice(customer,voucher,date,row){
   }
   return best;
 }
+/* آخر سعر إدخال للشب لنفس الصنف والحجم — من نفس المورد أول (حقل party، أو اسمه بنص البند للسندات القديمة) */
+function partyKey(s){ return String(s||'').replace(/[أإآ]/g,'ا').replace(/ى(?=\s|$)/g,'ي').replace(/ة(?=\s|$)/g,'ه').replace(/\s+/g,' ').trim(); }
+function lastInputPrice(customer,party,date,row){
+  const k=key(row.item), w=String(row.weight??''), pk=partyKey(party);
+  let any=null, mine=null;
+  for(const v of invoices){
+    if(v.customer!==customer||v.voucher!=='إدخال'||!(v.date<=date)) continue;
+    for(const x of v.rows||[]){
+      if(key(x.item)!==k||String(x.weight??'')!==w||x.price===''||x.price===null||x.price===undefined||isNaN(+x.price)) continue;
+      const c={price:+x.price,date:v.date,savedAt:String(v.savedAt||'')};
+      const newer=b=>!b||c.date>b.date||(c.date===b.date&&c.savedAt>b.savedAt);
+      if(newer(any)) any=c;
+      if(pk&&(partyKey(x.party)===pk||partyKey((x.original||'')+' '+(x.notes||'')).includes(pk))&&newer(mine)) mine=c;
+    }
+  }
+  return mine?{...mine,byParty:true}:any?{...any,byParty:false}:null;
+}
 function importRow(r,voucher,date,customer){
   const notes=[];
   const qty=(r.qty===null||r.qty===undefined)?'':r.qty;
@@ -4677,14 +4797,30 @@ function importRow(r,voucher,date,customer){
       notes.push(`سعر محسوب بالكيلو من ${labelOf(ref)}`);
     }
   }
+  row.party=r.party||'';
   if(r.priceFromMsg && r.price!==null && r.price!==undefined && !isNaN(+r.price)){
     row.price=+r.price; notes.push('السعر من الرسالة');
+  }else if(customer && row.item && voucher==='إدخال' && r.ret){
+    /* المرتجع = نفس سعر الإخراج للشب (قرار قصي 13/11) */
+    const o=lastUsedPrice(customer,'إخراج',date,row);
+    if(o){ row.price=o.price; notes.push(`مرتجع بسعر الإخراج لـ ${customer} (${o.date})`); }
+    else notes.push('⚠️ مرتجع وما إله سعر إخراج قبل — حدّد السعر');
+  }else if(customer && row.item && voucher==='إدخال' && !r.bulk){
+    /* الإدخال = آخر سعر إدخال من نفس المورد، وإلا آخر سعر إدخال للشب — مش سعر الإخراج ولا القائمة (قرار قصي 20/11) */
+    const p=lastInputPrice(customer,row.party,date,row);
+    if(p){ row.price=p.price; notes.push(`آخر سعر إدخال${p.byParty?' من '+row.party:''} لـ ${customer} (${p.date})`); }
+    else { row.price=''; notes.push('⚠️ ما إله سعر إدخال قبل — حدّد السعر'); }
   }else if(customer && row.item && !r.bulk){
     const last=lastUsedPrice(customer,voucher,date,row);
     if(last && (row.price===''||Math.abs(last.price-(+row.price))>0.0005)){
       notes.push(`آخر سعر استعملته لـ ${customer} (${last.date})${row.price!==''?' — القائمة '+fx(row.price):''}`);
       row.price=last.price;
     }
+  }
+  /* الإدخال (شراء) ما بيصير أعلى من سعر الإخراج — بينعلّم عليه */
+  if(customer && row.item && voucher==='إدخال' && !r.ret && row.price!==''){
+    const o=lastUsedPrice(customer,'إخراج',date,row);
+    if(o && +row.price>o.price+0.0005) notes.push(`⚠️ سعر الإدخال ${fx(row.price)} أعلى من سعر الإخراج ${fx(o.price)} — تأكد`);
   }
   calcTotal(row);
   row.notes=[row.notes,r.notes?'📱 '+r.notes:'',...notes].filter(Boolean).join(' • ');
@@ -4846,6 +4982,7 @@ document.addEventListener('keydown',e=>{
 
 initNav();
 (async()=>{
+  await IDB_READY;
   await ensureAdmin();
   try{
     const sv=JSON.parse(sessionStorage.getItem('wh_session')||'null');
@@ -4857,7 +4994,7 @@ initNav();
   render();
   markSaved();
 })();
-setTimeout(autoBackup,900);
+IDB_READY.then(()=>setTimeout(autoBackup,900));
 setTimeout(recoverDraft,500);
 </script>
 
@@ -5356,7 +5493,7 @@ if(typeof save==='function' && !window.__fbWrapped){
 }
 
 if(typeof firebase !== 'undefined'){
-  fbBoot().catch(e=>{
+  IDB_READY.then(()=>fbBoot()).catch(e=>{
     console.warn('fb boot',e);
     fbBadge('☁️ خطأ — النظام شغال محلي','off',String(e&&e.message||e));
   });
