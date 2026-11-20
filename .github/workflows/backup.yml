@@ -1,0 +1,29 @@
+# نسخة احتياطية يومية مشفّرة لبيانات السحابة (قراءة فقط).
+# المستودع عام: الملف مشفّر بالمفتاح العام keys/backup_public.pem، وما بينفك
+# إلا بالمفتاح الخاص المحفوظ بـ Google Drive. بتضل 90 يوم بـ Actions → Artifacts.
+name: daily-backup
+on:
+  schedule:
+    - cron: '17 21 * * *'   # 00:17 بتوقيت الأردن
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Pull and encrypt
+        run: |
+          mkdir -p out
+          node tools/backup.js pull "out/mefleh-backup-$(date -u +%Y-%m-%d).enc"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mefleh-backup-${{ github.run_id }}
+          path: out/*.enc
+          retention-days: 90
+          if-no-files-found: error
