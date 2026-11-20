@@ -669,6 +669,9 @@ table.sheet td,table.sheet th{border-color:#d9dfdc}
 .note{background:#fffaf0;border:1px solid #f3e1b5;border-radius:10px;color:#5c4510}
 .okbox{background:#f0f8f3;border:1px solid #cfe6d8;border-radius:10px}
 .revTag{background:var(--amb-s);color:var(--amb);border-color:var(--amb-l);font-weight:600}
+.vNote{display:inline-block;margin-inline-start:6px;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;
+  background:var(--amb-s);color:var(--amb);border:1px solid var(--amb-l);vertical-align:middle}
+@media print{.vNote{background:none;color:#000;border-color:#000}}
 .statementHeader{gap:16px}
 .reportLogo{width:96px;border-width:1px}
 .custHead{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px;align-items:center}
@@ -1461,6 +1464,15 @@ function stripHeader(line){
 }
 
 /* البحث عن الصنف بالكتالوج: مطابقة تامة ← مرادف ← احتواء ← تشابه */
+/* تطابق بالحرف بس (اسم/اسم مع الحجم/اسم بديل) — بلا تخمين */
+function exactItem(raw){
+  const k=key(raw); if(!k) return null;
+  for(const it of items){
+    if(key(labelOf(it))===k||key(it.name)===k) return it;
+    if((it.aliases||[]).some(a=>key(a)===k)) return it;
+  }
+  return null;
+}
 function findItem(raw){
   const k=key(raw); if(!k) return null;
   /* 1) تصحيح متعلَّم من تعديلاتك السابقة */
@@ -2397,10 +2409,20 @@ function refreshFlagsUI(invId){
   else if(TAB==='report') drawRep();
   else if(TAB==='invoices' && $('invDetail')){ const keep=window.scrollY; drawInv(); viewInv(invId,true); window.scrollTo(0,keep); }
 }
+/* «فتح السند» من الملاحظات: فلتر مؤقت على السند — بيرجع الفلتر القديم
+   بزر «كل السندات» أو أول ما تطلع من صفحة السندات */
+let fInvSaved=null, fInvFrom='';
 function openFlagInv(invId){
   const v=invoices.find(x=>x.id===invId); if(!v) return;
+  if(!fInvSaved) fInvSaved={...fInv};
+  fInvFrom=TAB;
   fInv={q:'',cust:v.customer,vou:v.voucher,from:v.date,to:v.date,rev:false};
   go('invoices'); viewInv(invId);
+}
+function clearInvFocus(back){
+  if(fInvSaved){ fInv=fInvSaved; fInvSaved=null; }
+  const t=fInvFrom; fInvFrom='';
+  if(back&&t&&t!=='invoices') go(t); else vInvoices();
 }
 let fFlags={st:'open',cust:''};
 function vFlags(){
@@ -2448,6 +2470,7 @@ function vFlags(){
 }
 
 function go(t){
+  if(t!=='invoices'&&fInvSaved){ fInv=fInvSaved; fInvSaved=null; fInvFrom=''; }
   TAB=t; render();
   try{ if(window.innerWidth<=900) setNav(false); }catch(e){}
   try{ window.scrollTo(0,0); }catch(e){}
@@ -2985,6 +3008,8 @@ function vEntry(){
       <div><label>التاريخ</label><input type="date" id="fDate" value="${draft.date}" onchange="draft.date=this.value"></div>
       <div><label>رقم السند (اختياري)</label><input id="fNo" value="${esc(draft.no)}" onchange="draft.no=this.value" placeholder="تلقائي"></div>
     </div>
+    <div style="margin-top:10px"><label>ملاحظة على السند (اختياري — بتطلع جنب السند بالقائمة والكشف)</label>
+      <input id="fNote" value="${esc(draft.note||'')}" onchange="draft.note=this.value" placeholder="مثلًا: طلبية تصدير"></div>
   </div>
 
   <div class="card">
@@ -3295,9 +3320,19 @@ function upd(i,k,v){
   r[k]=v;
   const heavy=(k==='item');          /* تغيير الصنف بيبدّل السعر والوزن والوحدة */
   if(k==='item'){
-    const m=findItem(v);
-    if(m){ applyItem(r,m); }
-    else { r.notes='⚠️ صنف غير موجود بقائمة الأسعار'; }
+    /* الاسم بينحفظ زي ما كتبته بالضبط — ما بنحوّله لأقرب صنف.
+       بس إذا اخترت صنف من القائمة بالحرف، بنعبّي الوزن والوحدة والسعر منه. */
+    v=String(v||'').trim(); r.item=v;
+    const m=exactItem(v);
+    if(m){
+      const keepPrice=draft.id&&r.price!==''&&r.price!=null?r.price:null;
+      applyItem(r,m);
+      if(keepPrice!==null){ const lp=r.price; r.price=keepPrice;
+        r.notes=(lp!==''&&Math.abs(lp-keepPrice)>0.001)?`سعر القائمة ${fx(lp)} — خليت سعر السند`:''; }
+    }
+    else { r.base=v;
+      const rest=String(r.notes||'').split(' • ').filter(x=>x&&!/^⚠️ صنف غير موجود|^⚠️ ما في «|^اسم حر/.test(x));
+      r.notes=rest.join(' • '); }
   }
   if(k==='price'){
     const m=findItem(r.item);
@@ -3394,12 +3429,15 @@ function commitInvoice(d,extra){
   const editing=!!d.id;
   const ix=editing?invoices.findIndex(x=>x.id===d.id):-1;
   const old=ix>=0?invoices[ix]:null;
+  /* ملاحظة السند: اللي بالمسودة، وإذا المسودة ما فيها حقل الملاحظة بتضل القديمة */
+  const vnote=d.note!==undefined?String(d.note||'').trim():String((old&&old.note)||'');
   const inv=Object.assign({ id:d.id||uid(),
     no:d.no||nextNo(d.customer,d.voucher),
     customer:d.customer, voucher:d.voucher, date:d.date,
     rows:JSON.parse(JSON.stringify(d.rows)).map(r=>({...r,day:r.day||dayNameOf(d.date)})),
     total:+total.toFixed(4),
     savedAt:new Date().toISOString() },
+    vnote?{note:vnote}:{},
     /* سند مستورد انعدّل: بيضل مستورد بس إذا ضل لنفس الزبون والتاريخ والنوع —
        لو صار سند ثاني (زبون/تاريخ غير) ما بيضل يحجز مفتاح الاستيراد */
     old&&old.importKey&&old.customer===d.customer&&old.date===d.date&&old.voucher===d.voucher
@@ -3502,7 +3540,13 @@ function drawConsumption(){
 }
 
 function vInvoices(){
+  /* فلتر «بس واتساب» ما بيضل شغّال وهو مخفي (بعد ما تخلص مراجعة آخر سند) */
+  if(fInv.rev&&!invoices.some(v=>v.review)) fInv.rev=false;
   $('view').innerHTML=`
+  ${fInvSaved?`<div class="note noprint row" style="align-items:center;gap:8px">
+    <span>معروض السند اللي فتحته من الملاحظات بس.</span>
+    <button class="btn sm" onclick="clearInvFocus(false)">كل السندات</button>
+    ${fInvFrom&&fInvFrom!=='invoices'?`<button class="btn sec sm" onclick="clearInvFocus(true)">↩ رجوع للملاحظات</button>`:''}</div>`:''}
   <div class="card">
     <h2>بحث بالسندات</h2>
     <div class="grid g4">
@@ -3529,9 +3573,9 @@ function invFiltered(){
     if(fInv.vou&&v.voucher!==fInv.vou)return false;
     if(fInv.from&&v.date<fInv.from)return false;
     if(fInv.to&&v.date>fInv.to)return false;
-    if(fInv.rev&&!v.review)return false;
+    if(fInv.rev&&!v.review&&invoices.some(x=>x.review))return false;
     if(!q)return true;
-    return key(v.no+' '+v.customer+' '+v.rows.map(r=>r.item).join(' ')).includes(q);
+    return key(v.no+' '+v.customer+' '+(v.note||'')+' '+v.rows.map(r=>r.item).join(' ')).includes(q);
   });
 }
 function drawInv(){
@@ -3551,7 +3595,7 @@ function drawInv(){
     <thead><tr><th>رقم السند</th><th>التاريخ</th><th>الزبون</th><th>النوع</th>
       <th>البنود</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
     <tbody>${L.length?L.map(v=>`<tr>
-      <td><b>${esc(v.no)}</b>${v.review&&isAdmin()?' <span class="revTag" title="مستورد من واتساب — بحاجة مراجعة">🟡 واتساب</span>':''}${isAdmin()&&openFlagsOf(v)?` <span class="flagTag" title="ملاحظات مفتوحة">${FLAG_SVG}${openFlagsOf(v)}</span>`:''}</td><td>${esc(v.date)}</td><td>${esc(v.customer)}</td>
+      <td><b>${esc(v.no)}</b>${v.note?` <span class="vNote">${esc(v.note)}</span>`:''}${v.review&&isAdmin()?' <span class="revTag" title="مستورد من واتساب — بحاجة مراجعة">🟡 واتساب</span>':''}${isAdmin()&&openFlagsOf(v)?` <span class="flagTag" title="ملاحظات مفتوحة">${FLAG_SVG}${openFlagsOf(v)}</span>`:''}</td><td>${esc(v.date)}</td><td>${esc(v.customer)}</td>
       <td class="${v.voucher==='إخراج'?'vOut':'vIn'}">${esc(v.voucher)}</td>
       <td>${v.rows.length}</td><td><b>${fx(v.total)}</b></td>
       <td>
@@ -3574,7 +3618,7 @@ function viewInv(id,noScroll){
   $('invDetail').innerHTML=`<div class="card watermark">
     <div class="statementHeader"><img class="reportLogo" src="${BADGE}" alt="ALMEFLEH">
       <h2 style="color:var(--g)">سند ${esc(v.voucher)} — ${esc(v.no)}</h2></div>
-    <p class="hint">${esc(v.customer)} • ${esc(v.date)}</p>
+    <p class="hint">${esc(v.customer)} • ${esc(v.date)}${v.note?` <span class="vNote">${esc(v.note)}</span>`:''}</p>
     ${vFl.length?`<div class="noprint">${flagList(vFl)}</div>`:''}
     <div class="tw"><table><thead><tr><th>#</th><th>اليوم</th><th>الصنف</th><th>الوزن</th>
     <th>الوحدة</th><th>العدد</th><th>سعر العبوة</th><th>الإجمالي</th>${adm?'<th class="noprint">ملاحظة</th>':''}</tr></thead><tbody>
@@ -3607,12 +3651,13 @@ function markReviewed(id){
   const v=invoices.find(x=>x.id===id); if(!v||!isAdmin()) return;
   v.review=false; saveInv();
   logAction('مراجعة',v,'سند مستورد من واتساب — تمت مراجعته');
-  drawInv(); viewInv(id); notify('✔ تمت مراجعة السند '+v.no,'ok');
+  if(fInv.rev&&!invoices.some(x=>x.review)){ fInv.rev=false; vInvoices(); } else drawInv();
+  viewInv(id); notify('✔ تمت مراجعة السند '+v.no,'ok');
 }
 function editInv(id){
   const v=invoices.find(x=>x.id===id); if(!v)return;
   if(!isAdmin() && v.customer !== myCustomer()){ notify('ما إلك صلاحية التعديل','bad'); return; }
-  draft={id:v.id,no:v.no,customer:v.customer,voucher:v.voucher,date:v.date,day:'',
+  draft={id:v.id,no:v.no,customer:v.customer,voucher:v.voucher,date:v.date,day:'',note:v.note||'',
     rows:JSON.parse(JSON.stringify(v.rows)),flags:JSON.parse(JSON.stringify(v.flags||[]))};
   lastSkipped=[]; go('entry'); toast('تعديل السند '+v.no);
 }
@@ -3862,7 +3907,7 @@ function sectionTable(list,title,cls){
   }));
   const dates=Object.keys(byDate).sort();
   const total=list.reduce((a,v)=>a+(+v.total||0),0);
-  const cols=7;
+  const cols=7, noted=new Set();
 
   if(!dates.length){
     return `<tr><th colspan="${cols}" class="secHead ${cls}">${title}</th></tr>
@@ -3886,7 +3931,8 @@ function sectionTable(list,title,cls){
           <b>${esc(g.day||'—')}</b><div class="dDate">${esc(d)}</div></td>`
         :`<td class="dayCell dCont ${dayCls}"></td>`;
       const rv=vOf.get(r), fl=adm&&rv?rowFlags(rv,r.id):[];
-      out+=`<td class="name">${esc(r.item)}${adm&&rv?`<button class="flagBtn mini noprint${fl.length?' on':''}"
+      const vn=rv&&rv.note&&!noted.has(rv.id)?(noted.add(rv.id),` <span class="vNote">${esc(rv.note)}</span>`):'';
+      out+=`<td class="name">${esc(r.item)}${vn}${adm&&rv?`<button class="flagBtn mini noprint${fl.length?' on':''}"
           title="${fl.length?esc(fl.map(f=>f.text).join(' • ')):'ملاحظة على هذا البند'}"
           onclick="addFlag(${jsArg(rv.id)},${jsArg(r.id)})">${FLAG_SVG}${fl.length?`<span>${fl.length}</span>`:''}</button>`:''}</td>
         <td>${esc(r.weight??'')}</td><td>${esc(r.unit||'—')}</td>
