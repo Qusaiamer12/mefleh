@@ -234,6 +234,28 @@ const unknown = r => !r || !r.item || /صنف غير موجود|ما في «|ح�
 
 /* لو الصنف ما انلقى: نجرب أجزاء الاسم (بيشيل أسماء الأطراف مثل «من ام محمد»).
    ما منجرب إلا إذا السطر فيه حجم صريح — حتى ما نخترع بنود من الدردشة. */
+/* الطرف (المورد/الزبون الفرعي) من سطر العنوان («ادخال من ابو ساكوت»، «الحمامي اخراج»).
+   الإدخال بيتسعّر بآخر سعر من نفس المورد (قرار قصي 20/11) — والإخراج سعره واحد لكل الأطراف. */
+const PARTY_ALIAS = {
+  'حسن': 'حسن غنام', 'قصي عليان': 'القريه', 'القريه': 'القريه',
+  'ابو ثكوت': 'ابو ساكوت', 'ابو سااكوت': 'ابو ساكوت', 'شيخ عمار': 'الشيخ عمار', 'شيخ نادر': 'الشيخ نادر',
+  'الحلاوني': 'الحلواني', 'معاويه': 'معاويه', 'يسوف جوهر': 'يوسف جوهر', 'يسوف عليان': 'يوسف عليان',
+  'ابو ينا': 'ابو ينال', 'الصحصحاح': 'الصحصاح', 'شادي الدباس': 'شادي دباس', 'ابو طارق الغلايني': 'ابو طارق',
+};
+const DIR_WORDS = /^(ادخال|اذخال|دخول|استلمنا|اخراج|اخراح|اخرج|اجراج|مرتجع|مرتحع|ارجاع|مرجع|من|لا|لأ|ل|ذمم|شخصي|مع|بدون|فاتوره|فاتورة)$/;
+function partyNorm(s) {
+  return String(s || '').replace(/[أإآ]/g, 'ا').replace(/ى(?=\s|$)/g, 'ي').replace(/ة(?=\s|$)/g, 'ه').replace(/\s+/g, ' ').trim();
+}
+function partyOf(lines) {
+  const cand = [lines[0], lines[lines.length - 1]].map(x => String(x || '').trim()).filter(x => x && !/[\d٠-٩]/.test(x));
+  for (const c of cand) {
+    const name = partyNorm(c).split(/[\s\/]+/).filter(w => w && !DIR_WORDS.test(w)).join(' ').trim();
+    if (name.length >= 2) return PARTY_ALIAS[name] || name;
+  }
+  return '';
+}
+const RETURN_RE = /(^|\s)(مرتجع|مرتحع|ارجاع|مرجع)(\s|$)/;
+
 function rescue(app, row, ctx, header) {
   if (!unknown(row) || row.weight === '' || row.weight === undefined) return row;
   const words = String(row.item || '').split(/\s+/).filter(Boolean);
@@ -377,6 +399,7 @@ function chatToVouchers(app, msgs, opt) {
       r.original = ln.trim();
       r.day = app.call('dayNameOf', m.date);
       r.msgTime = m.time; r.sender = m.sender; r.msgHead = header.slice(0, 60);
+      r.party = partyOf(keep); r.ret = RETURN_RE.test(partyNorm(header));
       r.ord = mi * 1000 + (++lineNo);
       r.src = img ? 'caption' : 'text';
       if (img) img.notes.push(`${m.time} «${ln.trim()}» انضاف كبند`);
@@ -596,6 +619,7 @@ function toImport(app, vouchers, opt) {
         bulk: !!r.bulk, bonus: !!r.bonus,
         notes: r.notes || '', original: r.original || '', src: r.src || 'text',
         msg: `${r.msgTime || ''} ${r.msgHead || ''}`.trim(),
+        party: r.party || '', ret: !!r.ret,
       })),
     })),
   };
