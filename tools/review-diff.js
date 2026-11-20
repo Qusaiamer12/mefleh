@@ -74,7 +74,25 @@ async function pull() {
     if (s.length !== m.len) throw new Error(`النسخة ناقصة: ${k} (${s.length}/${m.len}) — جرّب مرة ثانية`);
     data[k] = JSON.parse(s);
   }
-  return { pulledAt: new Date().toISOString(), data };
+  /* السندات صارت كل سند بمستند لحاله (wh_v_<id>) — منركّبها فوق النسخة القديمة:
+     الأحدث حفظًا بيكسب، ومستند فاضي (d:'') = سند محذوف */
+  const vids = Object.keys(docs).filter(i => i.startsWith('wh_v_') || i.startsWith('wh_vx_'));
+  if (vids.length) {
+    const map = new Map((data.wh_invoices_v1 || []).map(v => [v.id, v]));
+    for (const id of vids) {
+      const x = docs[id];
+      if (x.d) {
+        const R = JSON.parse(x.d), L = map.get(R.id);
+        if (!L || String(R.savedAt || '') >= String(L.savedAt || '')) map.set(R.id, R);
+      } else {
+        const rid = id.startsWith('wh_v_') ? id.slice(5) : Buffer.from(id.slice(6), 'hex').toString('utf8');
+        const L = map.get(rid);
+        if (L && !(String(L.savedAt || '') > String(x.i || ''))) map.delete(rid);
+      }
+    }
+    data.wh_invoices_v1 = [...map.values()].sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')));
+  }
+  return { pulledAt: new Date().toISOString(), voucherDocs: vids.length, data };
 }
 /* بيقبل: سحب {data:{wh_invoices_v1..}} أو نسخة احتياطية {invoices,items..} */
 function invoicesOf(snap) {
