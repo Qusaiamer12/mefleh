@@ -3436,7 +3436,9 @@ function commitInvoice(d,extra){
     customer:d.customer, voucher:d.voucher, date:d.date,
     rows:JSON.parse(JSON.stringify(d.rows)).map(r=>({...r,day:r.day||dayNameOf(d.date)})),
     total:+total.toFixed(4),
-    savedAt:new Date().toISOString() },
+    /* التعديل لازم يكون «أحدث» من النسخة اللي عدّلها حتى لو ساعة جهاز ثاني قدّام */
+    savedAt:(()=>{ const n=new Date().toISOString();
+      return old&&old.savedAt&&String(old.savedAt)>=n?new Date(Date.parse(old.savedAt)+1).toISOString():n; })() },
     vnote?{note:vnote}:{},
     /* سند مستورد انعدّل: بيضل مستورد بس إذا ضل لنفس الزبون والتاريخ والنوع —
        لو صار سند ثاني (زبون/تاريخ غير) ما بيضل يحجز مفتاح الاستيراد */
@@ -5046,6 +5048,7 @@ const FB = { ready:false, db:null, col:null, uiT:null, tries:0, retry:{},
              outbox:new Set(),           /* مفاتيح محفوظة محليًا قبل ما نجهز */
              pending:new Set(),          /* حفظات بتستنى مهلة الدفع (900ms) */
              syncIds:{},                 /* آخر IDs معروفة متزامنة لكل مفتاح قابل للدمج */
+             metaT:{},                   /* آخر نسخة (t) معروفة من فهرس كل مجموعة */
              tombs:{} };                 /* شواهد حذف محلية بانتظار الدفع */
 
 const fbCfgOK = () =>
@@ -5248,14 +5251,16 @@ function fbSplit(json){
 }
 /* كتابة قطع JSON للسحابة داخل batch جاهز (أو ضمن transaction) */
 function fbChunkWrites(writeFn,base,json,parts,oldN){
-  const n=parts.length;
-  writeFn('set',base+'_m',{chunks:n,len:json.length,t:Date.now()});
+  const n=parts.length, t=Date.now();
+  FB.metaT[base]=t;                     /* عشان ما نرجع نسحب اللي رفعناه نحنا */
+  writeFn('set',base+'_m',{chunks:n,len:json.length,t});
   for(let i=0;i<n;i++)
     writeFn('set',base+'_'+i,{i,d:parts[i]});
   for(let i=n;i<oldN;i++) writeFn('del',base+'_'+i);
 }
 
 async function fbPushNow(k){
+  if(k===LS.inv) return invPushNow();          /* السندات: كل سند بمستند لحاله */
   const raw=getVar(k);
 
   /* === مجموعات قابلة للدمج: اقرا-ادمج-اكتب بذرّية واحدة === */
@@ -5327,6 +5332,153 @@ function fbFlushPending(){
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') fbFlushPending(); });
 window.addEventListener('pagehide',fbFlushPending);
 
+/* ==========================================================
+   السندات: كل سند بمستند لحاله بالسحابة (wh_v_<id>)
+   ----------------------------------------------------------
+   قبل: كل السندات نص واحد (٤ ميغا) بينرفع كامل مع كل حفظ، وفايرستور ما
+   بيقبل أكثر من ١٠ ميغا بالعملية الوحدة — يعني كان في سقف رح نوصله.
+   هلأ: كل حفظ بيرفع السندات اللي تغيّرت بس، وكل جهاز بيسحب بس اللي تغيّر
+   من آخر مرة (حسب وقت السيرفر). الحذف = مستند فاضي (d:'') مع وقت الحذف.
+   النسخة القديمة (wh_invoices_v1) بتضل بالسحابة احتياط وما بننكتب عليها؛
+   إذا جهاز لسا على الكود القديم رفعها، بندمج سنداته هون وبنرفعها كمستندات.
+   ========================================================== */
+const INV_STATE='wh_fbinv_v1';
+const INVS={since:0,sent:{},del:{},blobT:0};   /* sent: id → بصمة اللي بالسحابة ('' = محذوف) */
+const fbTS=()=>firebase.firestore.FieldValue.serverTimestamp();
+function invDocId(id){
+  id=String(id);
+  return /^[a-z0-9_]+$/.test(id)?'wh_v_'+id
+    :'wh_vx_'+Array.from(new TextEncoder().encode(id)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function invIdOf(docId){
+  if(docId.startsWith('wh_v_')) return docId.slice(5);
+  if(docId.startsWith('wh_vx_')){ const h=docId.slice(6), b=new Uint8Array(h.length/2);
+    for(let i=0;i<b.length;i++) b[i]=parseInt(h.substr(i*2,2),16);
+    return new TextDecoder().decode(b); }
+  return null;
+}
+function sigOf(j){ let h=0x811c9dc5; for(let i=0;i<j.length;i++){ h^=j.charCodeAt(i); h=Math.imul(h,0x01000193); }
+  return (h>>>0).toString(36)+':'+j.length; }
+let invStT=null;
+function invStateSave(){
+  clearTimeout(invStT);
+  invStT=setTimeout(()=>{ try{ if(IDB.big) idbPut(INV_STATE,{since:INVS.since,sent:INVS.sent,del:INVS.del,blobT:INVS.blobT}); }catch(e){} },500);
+}
+async function invStateLoad(){
+  try{ if(IDB.big){ const s=await idbGet(INV_STATE);
+    if(s&&typeof s==='object'){ INVS.since=+s.since||0; INVS.sent=s.sent||{}; INVS.del=s.del||{}; INVS.blobT=+s.blobT||0; } } }catch(e){}
+  /* أمان: الحالة بتقول في سند بالسحابة ومش موجود هون (انمسح التخزين المحلي مثلًا) —
+     منسحب كل شي من الأول، وما منعتبره محذوف أبدًا */
+  const have=idsOf(getVar(LS.inv)), dm=deadMap(LS.inv), tom=tombs(LS.inv);
+  for(const id in INVS.sent)
+    if(INVS.sent[id]!=='' && !have.has(id) && !dm.has(id) && !tom.has(id)){ INVS.since=0; INVS.blobT=0; break; }
+}
+function invIndex(arr){ const m=new Map(); arr.forEach((v,i)=>{ if(v&&v.id) m.set(v.id,i); }); return m; }
+/* نسخة سحابية لسند واحد: الأحدث حفظًا بيكسب. بترجع true إذا تغيّر المحلي */
+function invApply(arr,idx,id,R,delAt){
+  const ix=idx.has(id)?idx.get(id):-1, L=ix>=0?arr[ix]:null;
+  if(R===null){                                    /* محذوف بالسحابة */
+    if(delAt && !(String(INVS.del[id]||'')>=delAt)) INVS.del[id]=delAt;
+    if(L && !(L.savedAt && delAt && String(L.savedAt)>String(delAt))){ arr[ix]=null; return true; }
+    return false;
+  }
+  if(tombs(LS.inv).has(id)) return false;          /* انحذف هون وبيستنى الرفع */
+  if(!L){
+    if(INVS.del[id] && String(R.savedAt||'')<=String(INVS.del[id])) return false;
+    arr.push(R); idx.set(id,arr.length-1); return true;
+  }
+  if(String(R.savedAt||'')>String(L.savedAt||'')){ arr[ix]=R; return true; }
+  return false;
+}
+function invFinish(arr){
+  let out=dropDead(LS.inv,arr.filter(Boolean));
+  out.sort((a,b)=>String(b.savedAt||'').localeCompare(String(a.savedAt||'')));
+  setVar(LS.inv,out);
+  FB.syncIds[LS.inv]=idsOf(out);
+  try{ fbLocalSave(LS.inv,out); }catch(e){}
+  fbRefreshUI();
+}
+/* مستندات سندات وصلت من السحابة (سحبة أولى أو لحظي) */
+function invApplyDocs(docs){
+  const arr=(Array.isArray(getVar(LS.inv))?getVar(LS.inv):[]).slice(), idx=invIndex(arr);
+  const n0=arr.length; let changed=false, dirty=false;
+  for(const {id:docId,data:x} of docs){
+    if(!x) continue;
+    const t=x.t&&x.t.toMillis?x.t.toMillis():0;
+    if(t>INVS.since) INVS.since=t;
+    const d=typeof x.d==='string'?x.d:'';
+    let id, R=null;
+    if(d){ try{ R=JSON.parse(d); }catch(e){ continue; } id=R&&R.id; if(!id) continue; INVS.sent[id]=sigOf(d); }
+    else { id=invIdOf(docId); if(!id) continue; INVS.sent[id]=''; }
+    if(invApply(arr,idx,id,R,d?'':String(x.i||''))) changed=true;
+    else if(R){ const L=arr[idx.get(id)]; if(L && String(L.savedAt||'')>String(R.savedAt||'')) dirty=true; }
+  }
+  if(changed) invFinish(arr);
+  invStateSave();
+  if(dirty) fbPush(LS.inv);                         /* المحلي أحدث من السحابة — منرفعه */
+  return {changed, added:Math.max(0,arr.filter(Boolean).length-n0)};
+}
+/* دمج النسخة القديمة (نص واحد) — من جهاز لسا على الكود القديم */
+function invMergeBlob(json){
+  let B; try{ B=JSON.parse(json); }catch(e){ return false; }
+  if(!Array.isArray(B)) return false;
+  const arr=(Array.isArray(getVar(LS.inv))?getVar(LS.inv):[]).slice(), idx=invIndex(arr), dm=deadMap(LS.inv);
+  let changed=false;
+  for(const R of B){
+    if(!R||!R.id) continue;
+    if(dm.has(R.id) && !(R.savedAt && String(R.savedAt)>dm.get(R.id))) continue;
+    if(invApply(arr,idx,R.id,R,'')) changed=true;
+  }
+  if(changed) invFinish(arr);
+  return changed;
+}
+/* الرفع: بس السندات اللي بصمتها اختلفت عن اللي بالسحابة */
+async function invPushOnce(){
+  const cur=Array.isArray(getVar(LS.inv))?getVar(LS.inv):[], ids=new Set(), W=[];
+  for(const v of cur){
+    if(!v||!v.id) continue; ids.add(v.id);
+    const j=JSON.stringify(v), s=sigOf(j);
+    if(INVS.sent[v.id]===s) continue;
+    if(j.length>450000){ notify(`⚠️ السند ${v.no||''} كبير كثير وما انرفع للسحابة — قسّمه لسندين`,'bad',9000); continue; }
+    W.push({id:v.id,d:j,i:String(v.savedAt||''),s});
+  }
+  /* الحذف بالسحابة بس للي انحذف عن قصد (شاهد حذف أو سجل الحذف المشترك) —
+     سند ناقص محليًا لأي سبب ثاني ما بيتمسح من السحابة */
+  const dm=deadMap(LS.inv), tom=tombs(LS.inv), now=new Date().toISOString();
+  for(const id in INVS.sent){
+    if(INVS.sent[id]==='' || ids.has(id)) continue;
+    if(tom.has(id)||dm.has(id)) W.push({id,d:'',i:dm.get(id)||now,s:''});
+  }
+  for(let k=0;k<W.length;){
+    const b=FB.db.batch(), part=[]; let bytes=0;
+    while(k<W.length && part.length<300 && bytes<4e6){
+      const w=W[k++]; part.push(w); bytes+=w.d.length*2+300;
+      b.set(FB.col.doc(invDocId(w.id)),{d:w.d,i:w.i,t:fbTS()});
+    }
+    await b.commit();
+    part.forEach(w=>{ INVS.sent[w.id]=w.s; if(w.s===''){ INVS.del[w.id]=w.i; tom.delete(w.id); } });
+    invStateSave();
+  }
+  if(W.length) fbBadge('☁️ متصل','on','المزامنة السحابية شغالة');
+}
+let invChain=Promise.resolve();
+function invPushNow(){ const p=invChain.then(invPushOnce); invChain=p.catch(()=>{}); return p; }
+
+/* فهرس مجموعة («_m») تغيّر من جهاز ثاني: منسحب قطعها بس */
+async function fbPullBlob(k,t,att){
+  try{
+    const m=FB.cache[k+'_m']; if(!m) return;
+    const ds=await Promise.all(Array.from({length:m.chunks||1},(_,i)=>FB.col.doc(k+'_'+i).get()));
+    if(FB.metaT[k]!==t) return;                       /* وصلت نسخة أحدث بالطريق */
+    ds.forEach(d=>{ if(d.exists) FB.cache[d.id]=(d.data()||{}).d||''; });
+    const json=fbTryAssemble(k);
+    if(json===null){ if(att<3) setTimeout(()=>fbPullBlob(k,t,att+1),1500*(att+1)); return; }
+    if(k===LS.inv){ invMergeBlob(json); INVS.blobT=t; invStateSave(); fbPush(LS.inv); return; }
+    if(json===FB.last[k]) return;
+    if(fbApply(k,json)) fbRefreshUI();
+  }catch(e){ console.warn('fb blob',k,e); }
+}
+
 /* ---------- السحب من السحابة ---------- */
 function fbTryAssemble(k){
   const m=FB.cache[k+'_m']; if(!m) return null;
@@ -5376,28 +5528,40 @@ function fbRefreshUI(){
 async function fbBootOnce(){
   fbBadge('☁️ بيتصل…','','جاري الاتصال بفايربيس');
   try{ firebase.initializeApp(FIREBASE_CONFIG); }catch(e){}
+  /* اختبار محلي بس: على localhost مع wh_fb_emu بنشتغل على محاكي فايرستور، مش السحابة الحقيقية */
+  let EMU=null;
+  try{ if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) EMU=localStorage.getItem('wh_fb_emu'); }catch(e){}
 
   /* توثيق مجهول: بس عشان نعرف إن الطلب من تطبيقك — حسابات
      المستخدمين بتضل من داخل النظام كما هي تمامًا           */
   try{
     const auth=firebase.auth();
+    if(EMU) try{ auth.useEmulator('http://127.0.0.1:9099'); }catch(e){}
     await Promise.race([auth.signInAnonymously(), fbTimeout(12000)]);
   }catch(e){ console.warn('fb auth',e); }
 
   FB.db=firebase.firestore();
+  if(EMU) try{ FB.db.useEmulator('127.0.0.1',+EMU||8085); }catch(e){}
   try{ await FB.db.enablePersistence({synchronizeTabs:true}); }catch(e){}
   FB.col=FB.db.collection(FB_COL);
 
   /* 1) سحبة أولى كاملة (تعادل استرجاع نسخة احتياطية لحظية) */
   fbBadge('☁️ بيسحب البيانات…');
-  const snap=await Promise.race([FB.col.get(), fbTimeout(20000)]);
-  snap.forEach(d=>{
-    const x=d.data();
-    if(d.id.endsWith('_m')) FB.cache[d.id]={chunks:x.chunks||1,len:x.len||0};
-    else FB.cache[d.id]=x.d||'';
-  });
+  /* الفهارس بس (_m) — مستندات السندات ما بننزّلها كلها كل مرة */
+  const msnap=await Promise.race([FB.col.where('t','>=',0).get(), fbTimeout(20000)]);
+  const metas={};
+  msnap.forEach(d=>{ if(!d.id.endsWith('_m')) return; const x=d.data();
+    metas[d.id.slice(0,-2)]=x; FB.cache[d.id]={chunks:x.chunks||1,len:x.len||0}; FB.metaT[d.id.slice(0,-2)]=x.t; });
+  await invStateLoad();
+  const need=[];
+  BIND.forEach(([k])=>{ const m=metas[k]; if(!m) return;
+    if(k===LS.inv && INVS.blobT===m.t) return;      /* النسخة القديمة ما تغيّرت من آخر مرة */
+    for(let i=0;i<(m.chunks||1);i++) need.push(k+'_'+i); });
+  const got=await Promise.race([Promise.all(need.map(id=>FB.col.doc(id).get())), fbTimeout(30000)]);
+  got.forEach(d=>{ if(d.exists) FB.cache[d.id]=(d.data()||{}).d||''; });
   let applied=0;
   BIND.forEach(([k])=>{
+    if(k===LS.inv) return;                          /* السندات تحت */
     const json=fbTryAssemble(k);
     if(json===null) return;
     let local=''; try{ const lv=getVar(k); local=JSON.stringify(k===LS.set?fbScrubSet(lv):(lv??null)); }catch(e){}
@@ -5409,6 +5573,18 @@ async function fbBootOnce(){
     else { FB.last[k]=json; const m=FB.cache[k+'_m']; if(m) FB.nChunks[k]=m.chunks;
            if(MERGEABLE.has(k)) FB.syncIds[k]=idsOf(getVar(k)); }
   });
+  /* السندات: النسخة القديمة (إذا تغيّرت) + المستندات اللي تغيّرت من آخر مزامنة */
+  if(metas[LS.inv] && INVS.blobT!==metas[LS.inv].t){
+    const json=fbTryAssemble(LS.inv);
+    if(json!==null){ if(invMergeBlob(json)) applied++; INVS.blobT=metas[LS.inv].t; }
+  }
+  const vFrom=firebase.firestore.Timestamp.fromMillis(Math.max(0,INVS.since-10*60*1000));
+  const vs=await Promise.race([FB.col.where('t','>',vFrom).get(), fbTimeout(60000)]);
+  const vdocs=[]; vs.forEach(d=>vdocs.push({id:d.id,data:d.data()}));
+  if(invApplyDocs(vdocs).changed) applied++;
+  FB.syncIds[LS.inv]=idsOf(getVar(LS.inv));
+  FB.outbox.add(LS.inv);                            /* أي سند محلي مش بالسحابة بينرفع (أو ولا شي) */
+  invStateSave();
   if(applied) fbRefreshUI();
 
   /* 2) منفعّل الدفع ونفرّغ صندوق البريد + زراعة المفاتيح الغايبة */
@@ -5429,31 +5605,30 @@ async function fbBootOnce(){
     l.forEach(k=>fbPush(k)); },8000);
 
   /* 3) استماع لحظي: أي حفظ من جهاز ثاني بيظهر عندك فورًا */
-  FB.col.onSnapshot(qs=>{
-    const touched=new Set();
-    qs.docChanges().forEach(ch=>{
-      const id=ch.doc.id;
-      if(ch.type==='removed') delete FB.cache[id];
-      else{
-        const x=ch.doc.data();
-        if(id.endsWith('_m')) FB.cache[id]={chunks:x.chunks||1,len:x.len||0};
-        else FB.cache[id]=x.d||'';
-      }
-      touched.add(id.replace(/_(?:m|\d+)$/,''));
-    });
-    let re=false;
-    touched.forEach(k=>{
-      if(!bBind(k)) return;
-      const json=fbTryAssemble(k);
-      if(json===null || json===FB.last[k]) return;
-      if(fbApply(k,json)) re=true;
-    });
-    if(re) fbRefreshUI();
-    fbBadge('☁️ متصل','on','المزامنة السحابية شغالة');
-  },err=>{
+  const onErr=err=>{
     console.warn('fb listen',err);
     fbBadge('☁️ انقطع — شغال محلي','off',String(err&&err.message||err));
-  });
+  };
+  /* الفهارس: مجموعة تغيّرت من جهاز ثاني ← منسحب قطعها بس */
+  FB.col.where('t','>=',0).onSnapshot(qs=>{
+    qs.docChanges().forEach(ch=>{
+      if(ch.type==='removed') return;
+      const id=ch.doc.id; if(!id.endsWith('_m')) return;
+      const k=id.slice(0,-2), x=ch.doc.data();
+      if(!bBind(k) || x.t===FB.metaT[k]) return;
+      FB.metaT[k]=x.t; FB.cache[id]={chunks:x.chunks||1,len:x.len||0};
+      fbPullBlob(k,x.t,0);
+    });
+    fbBadge('☁️ متصل','on','المزامنة السحابية شغالة');
+  },onErr);
+  /* السندات: بس اللي بيتغيّر من هلأ ورايح */
+  FB.col.where('t','>',firebase.firestore.Timestamp.fromMillis(Math.max(0,INVS.since-10*60*1000))).onSnapshot(qs=>{
+    const docs=[];
+    qs.docChanges().forEach(ch=>{ if(ch.type!=='removed') docs.push({id:ch.doc.id,data:ch.doc.data()}); });
+    if(!docs.length) return;
+    const r=invApplyDocs(docs);
+    if(r.added) notify(`☁️ وصلك ${r.added} سند جديد من جهاز ثاني`,'ok',3500);
+  },onErr);
 
   fbBadge('☁️ متصل','on','المزامنة السحابية شغالة');
   if(applied||seeds.length||flush.length)
